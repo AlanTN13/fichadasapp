@@ -1,4 +1,4 @@
-const BASE_URL = "https://script.google.com/macros/s/AKfycbwY_cW3N7xGhebpYogI2P_gz6NqgQAfkciQmcs6AfO5yIPJOLZ3wRjpfH8L2qDbZLbrgg/exec";
+const BASE_URL = "https://script.google.com/macros/s/AKfycbzuNMFU9WkzzGOBFeYVtlTjyWgkuGW1hPOTFF-8YHxdUsqtSJwBacE6Hf3LEj4orKL3cA/exec";
 
 export const fetchApi = async (data) => {
   try {
