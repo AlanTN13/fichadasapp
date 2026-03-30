@@ -1,42 +1,37 @@
 import { useState, useRef, useEffect } from 'react';
 import { fetchApi } from '../api';
-import { MapPin, User, ChevronRight, Delete, CheckCircle2, History, Camera } from 'lucide-react';
+import { MapPin, User, ChevronRight, Delete, CheckCircle2, History, Camera, LogOut, Loader2, PlayCircle, StopCircle, Coffee, ArrowLeft, ShieldCheck } from 'lucide-react';
 
 export default function KioskMode({ locationId, onLogout }) {
   const [dni, setDni] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [isValidated, setIsValidated] = useState(false);
+  const [step, setStep] = useState('dni'); // 'dni', 'actions', 'photo', 'loading', 'success'
+  const [selectedAction, setSelectedAction] = useState(null);
   const [validatedUserId, setValidatedUserId] = useState(null);
-  const [capturedPhoto, setCapturedPhoto] = useState(null); // Nuevo: guardamos la imagen acá
+  const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [error, setError] = useState('');
   const [lastEntry, setLastEntry] = useState(null);
   const videoRef = useRef(null);
 
-  // MANEJO DE TECLADO FÍSICO (RESTAURADO PERMANENTE)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (loading || success) return;
+      if (step !== 'dni') return;
       if (e.key >= '0' && e.key <= '9') {
-        if (dni.length < 8) {
-            setDni(prev => prev + e.key);
-            setIsValidated(false);
-        }
+        if (dni.length < 8) setDni(prev => prev + e.key);
       } else if (e.key === 'Backspace') {
         setDni(prev => prev.slice(0, -1));
-        setIsValidated(false);
       } else if (e.key === 'Enter') {
         if (dni.length >= 7) handleValidate();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dni, loading, success]);
+  }, [dni, step]);
 
   useEffect(() => {
-    startCamera();
-    return () => stopCamera();
-  }, []);
+    if (step === 'photo' || step === 'dni') {
+        startCamera();
+    }
+  }, [step]);
 
   const startCamera = async () => {
     try {
@@ -45,7 +40,7 @@ export default function KioskMode({ locationId, onLogout }) {
       });
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
-      setError("Permiso de cámara denegado");
+      console.error("Camera error:", err);
     }
   };
 
@@ -55,45 +50,47 @@ export default function KioskMode({ locationId, onLogout }) {
     }
   };
 
-  const handleValidate = async () => {
-    if (dni.length < 7) {
-      setError('DNI demasiado corto');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    
-    try {
-      // 1. CAPTURAMOS LA FOTO PRIMERO (Localmente es instantáneo)
-      if (videoRef.current) {
+  const takePhoto = () => {
+    if (videoRef.current) {
         const canvas = document.createElement('canvas');
         canvas.width = videoRef.current.videoWidth;
         canvas.height = videoRef.current.videoHeight;
         canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
-        const fotoBase64 = canvas.toDataURL('image/jpeg', 0.8);
-        setCapturedPhoto(fotoBase64);
-      }
+        return canvas.toDataURL('image/jpeg', 0.8);
+    }
+    return null;
+  };
 
-      // 2. VALIDAMOS CON EL SERVIDOR
+  const handleValidate = async () => {
+    if (dni.length < 7) {
+      setError('DNI demasiado corto');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+    setStep('loading');
+    setError('');
+    
+    try {
       const resDni = await fetchApi({ action: 'validarDNI', dni });
       if (!resDni.success) {
         setError(resDni.error || 'DNI no encontrado');
-        setLoading(false);
+        setStep('dni');
+        setTimeout(() => setError(''), 3000);
         return;
       }
       
       setValidatedUserId(resDni.usuario_id);
-      setIsValidated(true);
+      setStep('actions');
     } catch (err) {
-      console.error("Error en validación:", err);
       setError('Error de conexión');
-    } finally {
-      setLoading(false);
+      setStep('dni');
     }
   };
 
-  const handleAction = async (tipo) => {
-    setLoading(true);
+  const confirmAndSend = async () => {
+    const photo = takePhoto();
+    setCapturedPhoto(photo);
+    setStep('loading');
     setError('');
 
     try {
@@ -106,143 +103,193 @@ export default function KioskMode({ locationId, onLogout }) {
         usuario_id: validatedUserId,
         dni: dni,
         locationId,
-        tipo,
-        foto_base64: capturedPhoto, // <--- Usamos la foto que ya sacamos
+        tipo: selectedAction.value,
+        foto_base64: photo,
         latitud: pos.coords.latitude,
         longitud: pos.coords.longitude
       });
 
       if (resFichada.success) {
-        setLastEntry({ nombre: "Personal Nahuel", tipo, hora: new Date().toLocaleTimeString() });
-        setSuccess(true);
+        setLastEntry({ nombre: "Personal Nahuel", tipo: selectedAction.label, hora: new Date().toLocaleTimeString() });
+        setStep('success');
         setDni('');
-        setIsValidated(false);
-        setTimeout(() => setSuccess(false), 4000);
+        setSelectedAction(null);
+        setTimeout(() => setStep('dni'), 4000);
+      } else {
+          setError(resFichada.error || 'Error al fichar');
+          setStep('photo');
       }
     } catch (err) {
       setError('Error de envío');
-    } finally {
-      setLoading(false);
+      setStep('photo');
     }
   };
 
-  if (loading) {
+  if (step === 'loading') {
     return (
-      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-[#0f172a]/80 backdrop-blur-xl animate-in fade-in duration-500">
-        <div className="relative">
-          <div className="absolute inset-0 bg-blue-500/20 rounded-full animate-ping scale-150 duration-[2000ms]" />
-          <div className="relative bg-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center space-y-6 border border-white/20">
-            <div className="w-16 h-16 border-4 border-blue-50 border-t-blue-600 rounded-full animate-spin shadow-inner" />
-            <div className="text-center">
-                <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase leading-none">Verificando</h3>
-            </div>
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-8 bg-slate-900/90 backdrop-blur-md fade-up">
+        <div className="relative mb-12">
+          {/* Pulse Effect */}
+          <div className="absolute inset-[-40px] bg-blue-500/20 rounded-full animate-pulse scale-150" />
+          <div className="absolute inset-[-20px] bg-blue-600/10 rounded-full animate-ping scale-125" />
+          
+          <div className="relative w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl">
+            <Loader2 className="animate-spin text-blue-600" size={40} strokeWidth={2.5} />
           </div>
+        </div>
+        <h3 className="text-3xl font-black text-white tracking-widest uppercase italic">VERIFICANDO</h3>
+        <p className="text-blue-400 font-bold text-[10px] uppercase tracking-[0.4em] mt-4 opacity-70">Enviando datos al servidor</p>
+      </div>
+    );
+  }
+
+  if (step === 'success') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white fade-up text-center">
+        <div className="w-24 h-24 bg-emerald-500 rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/30 animate-bounce">
+          <CheckCircle2 size={48} className="text-white" />
+        </div>
+        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight uppercase leading-none mb-6">REGISTRADO</h2>
+        <div className="w-full bg-slate-50 p-6 rounded-3xl border border-slate-100 flex flex-col space-y-3">
+            <div className="flex justify-between items-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <span>Acción</span>
+                <span className="text-slate-900">{lastEntry?.tipo.replace('\n', ' ')}</span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <span>Hora</span>
+                <span className="text-slate-900">{lastEntry?.hora}</span>
+            </div>
         </div>
       </div>
     );
   }
 
-  if (success) {
-    return (
-      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-slate-50 animate-in zoom-in duration-500">
-        <div className="w-32 h-32 bg-emerald-500 rounded-full flex items-center justify-center mb-10 shadow-2xl shadow-emerald-500/40 animate-bounce">
-          <CheckCircle2 size={64} className="text-white" />
-        </div>
-        <div className="text-center space-y-4">
-          <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none italic italic">¡LISTO!</h2>
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-center space-x-6 mt-8">
-            <div className="text-right pr-6 border-r border-gray-100">
-                <p className="text-[9px] font-black text-gray-400 uppercase">Hora</p>
-                <p className="text-sm font-black text-slate-900">{lastEntry?.hora}</p>
-            </div>
-            <div className="text-left">
-                <p className="text-[9px] font-black text-gray-400 uppercase">Acción</p>
-                <p className="text-sm font-black text-emerald-600 uppercase italic italic">{lastEntry?.tipo}</p>
-            </div>
+  if (step === 'actions') {
+      const actions = [
+          { label: 'Inicio de\nJornada', value: 'Inicio de Jornada', icon: <PlayCircle size={44} strokeWidth={1} />, color: 'border-emerald-500/20 bg-emerald-50/30 text-emerald-900' },
+          { label: 'Fin de\nJornada', value: 'Fin de Jornada', icon: <StopCircle size={44} strokeWidth={1} />, color: 'border-rose-500/20 bg-rose-50/30 text-rose-900' },
+          { label: 'Inicio\nBreak', value: 'Inicio Break', icon: <Coffee size={44} strokeWidth={1} />, color: 'border-amber-500/20 bg-amber-50/30 text-amber-900' },
+          { label: 'Fin\nBreak', value: 'Fin Break', icon: <History size={44} strokeWidth={1} />, color: 'border-blue-500/20 bg-blue-50/40 text-blue-900' },
+      ];
+
+      return (
+          <div className="flex-1 flex flex-col p-8 fade-up bg-white">
+              <header className="mb-10 text-center">
+                   <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">REGISTRO</h2>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-3">Selecciona tu actividad</p>
+              </header>
+
+              <div className="flex-1 grid grid-cols-2 gap-5 place-content-center">
+                  {actions.map((act, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { setSelectedAction(act); setStep('photo'); }}
+                        className={`aspect-square group p-8 rounded-[3rem] border-2 ${act.color} flex flex-col items-center justify-center text-center space-y-5 active:scale-95 transition-all duration-300 shadow-xl shadow-slate-100 flex-shrink-0`}
+                      >
+                        <div className="transition-transform group-hover:scale-110 duration-500">
+                            {act.icon}
+                        </div>
+                        <span className="text-[11px] font-extrabold uppercase tracking-widest leading-tight whitespace-pre-line">
+                            {act.label}
+                        </span>
+                      </button>
+                  ))}
+              </div>
+
+              <div className="mt-8 flex justify-center">
+                <button onClick={() => setStep('dni')} className="flex items-center space-x-3 px-8 py-3 bg-slate-50 text-slate-400 rounded-full border border-slate-100/50 hover:text-blue-600 transition-colors">
+                    <ArrowLeft size={16} />
+                    <span className="text-[9px] font-black uppercase tracking-widest leading-none">Volver atrás</span>
+                </button>
+              </div>
           </div>
-        </div>
-      </div>
-    );
+      );
+  }
+
+  if (step === 'photo') {
+      return (
+          <div className="flex-1 flex flex-col p-8 fade-up bg-white">
+              <header className="mb-8 flex items-center justify-between">
+                <div>
+                   <h2 className="text-2xl font-extrabold text-slate-900 leading-none">VALIDAR FOTO</h2>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Paso final de seguridad</p>
+                </div>
+                <button onClick={() => setStep('actions')} className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400">
+                    <ArrowLeft size={20} />
+                </button>
+              </header>
+
+              <div className="relative flex-1 rounded-[3rem] overflow-hidden bg-slate-900 shadow-2xl mb-8 border-4 border-white">
+                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover grayscale-[10%]" />
+                  <div className="absolute inset-0 border-[20px] border-black/10 pointer-events-none" />
+                  <div className="absolute top-6 left-6 flex items-center space-x-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+                      <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+                      <span className="text-[8px] font-black text-white uppercase tracking-widest leading-none">REC START</span>
+                  </div>
+              </div>
+
+              <button 
+                onClick={confirmAndSend}
+                className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-bold uppercase tracking-widest text-sm flex items-center justify-center space-x-4 shadow-xl shadow-blue-200 active:scale-95 transition-all"
+              >
+                <Camera size={20} />
+                <span>Confirmar Identidad</span>
+              </button>
+          </div>
+      );
   }
 
   return (
-    <div className="flex flex-col flex-1 space-y-3 px-1 pb-2">
-      <div className={`relative h-[220px] bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 transition-all duration-500 flex-shrink-0 ${isValidated ? 'border-blue-500 scale-[1.02]' : 'border-white'}`}>
-        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover grayscale-[30%]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent" />
-        
-        {isValidated && (
-            <div className="absolute inset-0 bg-blue-600/10 backdrop-blur-[2px] flex items-center justify-center">
-                <div className="bg-blue-600 text-white px-4 py-2 rounded-full flex items-center space-x-2 animate-bounce shadow-xl">
-                    <Camera size={16} />
-                    <span className="text-xs font-black uppercase tracking-widest">Foto Capturada</span>
-                </div>
-            </div>
-        )}
-
-        <div className="absolute top-3 left-4 flex items-center space-x-2 px-3 py-1 bg-black/40 backdrop-blur-md rounded-xl border border-white/10">
-          <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
-          <span className="text-[8px] font-black text-white uppercase tracking-widest">LIVE REC</span>
-        </div>
-        
-        <div className="absolute bottom-4 left-6 right-6 flex items-end justify-between">
-            <div className="flex flex-col">
-                <h4 className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-0.5">DNI</h4>
-                <p className="text-xl font-black text-white uppercase tracking-tight leading-none italic drop-shadow-md">
-                    {dni || '--------'}
-                </p>
-            </div>
-            <div className="flex items-center space-x-1.5 text-blue-400 pb-0.5">
-                <MapPin size={10} />
-                <span className="text-[8px] font-black uppercase tracking-widest">Geo-Sync</span>
-            </div>
-        </div>
+    <div className="flex flex-col flex-1 pb-6 px-6 fade-up">
+      <div className="text-center mt-6 mb-10">
+        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight uppercase leading-none mb-2 italic">IDENTIFICACIÓN</h2>
+        <p className="text-slate-400 font-medium text-[11px] uppercase tracking-wider">Ingresa tu DNI para comenzar</p>
       </div>
 
-      <div className="bg-white p-1.5 rounded-2xl border border-gray-100 flex items-center shadow-sm flex-shrink-0 mx-1">
-        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 flex-shrink-0">
-          <User size={18} />
-        </div>
-        <div className="flex-1 px-3">
-          <p className="text-xl font-black text-slate-900 tracking-[0.18em] leading-none font-mono">
-            {dni || <span className="text-gray-100">00000000</span>}
-          </p>
-        </div>
+      <div className="mb-10 bg-slate-50 p-4 rounded-[2.5rem] border border-slate-100 flex items-center shadow-inner shrink-0">
+          <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center text-white flex-shrink-0">
+              <User size={24} />
+          </div>
+          <div className="flex-1 px-5">
+              <p className={`text-3xl font-bold tracking-[0.05em] leading-none ${!dni ? 'text-slate-200' : 'text-slate-900'}`}>
+                  {dni || '00.000.000'}
+              </p>
+          </div>
+          {dni.length > 0 && (
+              <button onClick={() => setDni('')} className="w-10 h-10 flex items-center justify-center text-slate-300"><Delete size={20} /></button>
+          )}
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5 flex-shrink-0 px-1">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'DEL', 0, 'OK'].map((key) => (
+      <div className="flex-1 grid grid-cols-3 gap-3 mb-6">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'BORRAR', 0, 'SIGUIENTE'].map((key) => (
           <button
             key={key}
             onClick={() => {
-              if (key === 'DEL') { setDni(prev => prev.slice(0, -1)); setIsValidated(false); }
-              else if (key === 'OK') { handleValidate(); }
-              else if (dni.length < 8) { setDni(prev => prev + key); setIsValidated(false); }
+              if (key === 'BORRAR') setDni(prev => prev.slice(0, -1));
+              else if (key === 'SIGUIENTE') handleValidate();
+              else if (dni.length < 8) setDni(prev => prev + key);
             }}
-            className={`h-11 sm:h-12 rounded-2xl text-lg font-black transition-all flex items-center justify-center shadow-sm active:scale-90 ${
-              key === 'OK' ? 'bg-blue-600 text-white' : key === 'DEL' ? 'bg-slate-100 text-slate-500' : 'bg-white text-slate-900 border border-gray-100'
+            className={`rounded-[2rem] text-2xl font-bold transition-all flex items-center justify-center active:scale-90 border ${
+              key === 'SIGUIENTE' 
+                ? 'bg-blue-600 text-white border-blue-500 shadow-xl shadow-blue-100 flex-col py-4' 
+                : key === 'BORRAR' 
+                  ? 'bg-slate-50 text-slate-500 border-transparent text-[10px] font-black uppercase' 
+                  : 'bg-white text-slate-900 border-slate-100 shadow-sm'
             }`}
           >
-            {key === 'DEL' ? <Delete size={18} /> : key === 'OK' ? <div className="flex flex-col items-center"><span className="text-[8px] font-black uppercase leading-none">Tomar Foto</span></div> : key}
+            {key === 'SIGUIENTE' ? <><ChevronRight size={24} /><span className="text-[7px] font-black uppercase tracking-tighter mt-1">Siguiente</span></> : key === 'BORRAR' ? <Delete size={20} /> : key}
           </button>
         ))}
       </div>
 
-      <div className={`space-y-2 flex-shrink-0 pt-1 transition-all duration-500 ${isValidated ? 'opacity-100 translate-y-0' : 'opacity-20 translate-y-2 pointer-events-none grayscale'}`}>
-        <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => handleAction('Inicio Jornada')} className="py-3 bg-emerald-500 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-emerald-500/20">Ingreso Jornada</button>
-            <button onClick={() => handleAction('Cierre Jornada')} className="py-3 bg-rose-500 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-rose-500/20">Fin Jornada</button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => handleAction('Inicio Break')} className="py-2.5 bg-amber-100 text-amber-700 rounded-xl font-black uppercase text-[9px] flex items-center justify-center space-x-2"><History size={14} /><span>Inicio Break</span></button>
-            <button onClick={() => handleAction('Fin Break')} className="py-2.5 bg-blue-100 text-blue-700 rounded-xl font-black uppercase text-[9px] flex items-center justify-center space-x-2"><CheckCircle2 size={14} /><span>Fin Break</span></button>
-        </div>
-      </div>
+      <div className="h-0 overflow-hidden"><video ref={videoRef} autoPlay playsInline muted /></div>
 
-      {error && <div className="p-3 bg-rose-500 text-white rounded-2xl text-center text-[10px] font-black uppercase">{error}</div>}
+      {error && (
+        <div className="mt-4 p-4 bg-rose-50 text-rose-600 rounded-2xl text-center text-[10px] font-black uppercase tracking-widest border border-rose-100 animate-bounce">{error}</div>
+      )}
       
-      <div className="text-center pt-1">
-          <button onClick={onLogout} className="text-[9px] font-black text-blue-600 uppercase tracking-widest px-6 py-2 bg-blue-50 rounded-full">Cambiar Ubicación</button>
+      <div className="mt-auto py-4 text-center">
+          <button onClick={onLogout} className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] hover:text-blue-600 transition-all uppercase">--- CAMBIAR PUNTO ---</button>
       </div>
     </div>
   );
