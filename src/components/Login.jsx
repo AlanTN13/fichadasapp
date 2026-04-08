@@ -33,7 +33,7 @@ export default function Login({ onLoginSuccess }) {
   };
 
   return (
-    <div className="flex flex-col flex-1 justify-center items-center w-full max-w-sm mx-auto px-6 py-12 fade-up">
+    <div className="flex flex-col flex-1 justify-center items-center w-full max-w-sm mx-auto px-6 pt-12 pb-32 fade-up min-h-max">
       
       {/* Animated Icon Container */}
       <div className="mb-12 relative">

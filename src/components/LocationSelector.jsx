@@ -42,7 +42,7 @@ export default function LocationSelector({ onSelectLocation, email }) {
   }
 
   return (
-    <div className="flex flex-col flex-1 justify-center items-center w-full max-w-sm mx-auto px-6 fade-up">
+    <div className="flex flex-col flex-1 justify-center items-center w-full max-w-sm mx-auto px-6 pt-12 pb-32 fade-up min-h-max">
       <div className="mb-10 relative">
         <div className="absolute inset-0 bg-blue-600/10 blur-[60px] rounded-full scale-150 animate-pulse" />
         <div className="relative w-24 h-24 rounded-3xl bg-slate-900 flex items-center justify-center text-white shadow-2xl shadow-slate-900/30">

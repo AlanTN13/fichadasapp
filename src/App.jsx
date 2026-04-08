@@ -1,18 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LogOut } from 'lucide-react';
 import Login from './components/Login';
 import LocationSelector from './components/LocationSelector';
 import KioskMode from './components/KioskMode';
 import Dashboard from './components/Dashboard';
+import { processFichadasQueue } from './queue';
 
 function App() {
   const [view, setView] = useState('login'); // 'login', 'location', 'kiosk', 'dashboard'
-  const [userRole, setUserRole] = useState(null);
   const [locationId, setLocationId] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
 
   const handleLoginSuccess = (role, email) => {
-    setUserRole(role);
     setUserEmail(email);
     if (role === 'super_admin') {
       setView('dashboard');
@@ -26,9 +25,28 @@ function App() {
     setView('kiosk');
   };
 
+  useEffect(() => {
+    processFichadasQueue();
+
+    const interval = setInterval(() => {
+      processFichadasQueue();
+    }, 5000);
+
+    const handleOnline = () => {
+      processFichadasQueue();
+    };
+
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 bg-[#020617] flex items-center justify-center overflow-hidden font-['Montserrat']">
-      
+
       {/* Dynamic Background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-blue-600/30 blur-[160px] rounded-full animate-pulse" />
@@ -36,7 +54,7 @@ function App() {
       </div>
 
       <main className="app-container">
-        
+
         {/* Header Branding */}
         {view !== 'kiosk' && (
           <header className="px-8 pt-10 pb-6 text-center relative flex-shrink-0 bg-white">
@@ -51,12 +69,12 @@ function App() {
                 </button>
               )}
             </div>
-            
+
             <div className="inline-flex items-center space-x-2 px-3 py-1 bg-blue-600/10 rounded-full mb-4">
               <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse" />
               <span className="text-[10px] font-black text-blue-600 tracking-widest uppercase">ID SMART SYSTEM</span>
             </div>
-            
+
             <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-[0.85] uppercase italic italic">
               LAVADERO<br />
               <span className="text-blue-600">NAHUEL</span>
@@ -70,13 +88,13 @@ function App() {
           {view === 'kiosk' && <KioskMode locationId={locationId} onLogout={() => setView('login')} />}
           {view === 'dashboard' && <Dashboard onLogout={() => setView('login')} email={userEmail} />}
         </div>
-        
+
         {view !== 'kiosk' && (
-           <footer className="py-6 bg-white shrink-0">
-             <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em] text-center">
-               © 2026 NAHUEL • BUILT BY ID SMART
-             </p>
-           </footer>
+          <footer className="py-6 bg-white shrink-0">
+            <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em] text-center">
+              © 2026 NAHUEL • BUILT BY ID SMART
+            </p>
+          </footer>
         )}
       </main>
     </div>

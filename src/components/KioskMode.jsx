@@ -1,16 +1,50 @@
-import { useState, useRef, useEffect } from 'react';
-import { fetchApi } from '../api';
-import { MapPin, User, ChevronRight, Delete, CheckCircle2, History, Camera, LogOut, Loader2, PlayCircle, StopCircle, Coffee, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { User, ChevronRight, Delete, CheckCircle2, History, Camera, Loader2, PlayCircle, StopCircle, Coffee, ArrowLeft } from 'lucide-react';
+import { enqueueFichada, processFichadasQueue } from '../queue';
+
+const FALLBACK_POSITION = { coords: { latitude: 0, longitude: 0 } };
+
+const ACTIONS = [
+  { label: 'Inicio de\nJornada', value: 'Inicio de Jornada', icon: <PlayCircle size={44} strokeWidth={1} />, color: 'border-emerald-500/20 bg-emerald-50/30 text-emerald-900' },
+  { label: 'Fin de\nJornada', value: 'Fin de Jornada', icon: <StopCircle size={44} strokeWidth={1} />, color: 'border-rose-500/20 bg-rose-50/30 text-rose-900' },
+  { label: 'Inicio\nBreak', value: 'Inicio Break', icon: <Coffee size={44} strokeWidth={1} />, color: 'border-amber-500/20 bg-amber-50/30 text-amber-900' },
+  { label: 'Fin\nBreak', value: 'Fin Break', icon: <History size={44} strokeWidth={1} />, color: 'border-blue-500/20 bg-blue-50/40 text-blue-900' },
+];
 
 export default function KioskMode({ locationId, onLogout }) {
   const [dni, setDni] = useState('');
   const [step, setStep] = useState('dni'); // 'dni', 'actions', 'photo', 'loading', 'success'
   const [selectedAction, setSelectedAction] = useState(null);
-  const [validatedUserId, setValidatedUserId] = useState(null);
-  const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [error, setError] = useState('');
   const [lastEntry, setLastEntry] = useState(null);
   const videoRef = useRef(null);
+
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch (err) {
+      console.error("Camera error:", err);
+    }
+  }
+
+  function stopCamera() {
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+    }
+  }
+
+  const handleValidate = useCallback(async () => {
+    if (dni.length < 7) {
+      setError('DNI demasiado corto');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+    setError('');
+    setStep('actions');
+  }, [dni]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -25,30 +59,15 @@ export default function KioskMode({ locationId, onLogout }) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dni, step]);
+  }, [dni, step, handleValidate]);
 
   useEffect(() => {
     if (step === 'photo' || step === 'dni') {
-        startCamera();
+      startCamera();
+      return stopCamera;
     }
+    stopCamera();
   }, [step]);
-
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } 
-      });
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch (err) {
-      console.error("Camera error:", err);
-    }
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-    }
-  };
 
   const takePhoto = () => {
     if (videoRef.current) {
@@ -61,46 +80,33 @@ export default function KioskMode({ locationId, onLogout }) {
     return null;
   };
 
-  const handleValidate = async () => {
-    if (dni.length < 7) {
-      setError('DNI demasiado corto');
-      setTimeout(() => setError(''), 3000);
-      return;
-    }
-    setStep('loading');
-    setError('');
-    
-    try {
-      const resDni = await fetchApi({ action: 'validarDNI', dni });
-      if (!resDni.success) {
-        setError(resDni.error || 'DNI no encontrado');
-        setStep('dni');
-        setTimeout(() => setError(''), 3000);
+  const getPositionFast = () =>
+    new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(FALLBACK_POSITION);
         return;
       }
-      
-      setValidatedUserId(resDni.usuario_id);
-      setStep('actions');
-    } catch (err) {
-      setError('Error de conexión');
-      setStep('dni');
-    }
-  };
+
+      navigator.geolocation.getCurrentPosition(
+        resolve,
+        () => resolve(FALLBACK_POSITION),
+        {
+          enableHighAccuracy: false,
+          timeout: 1500,
+          maximumAge: 60000,
+        }
+      );
+    });
 
   const confirmAndSend = async () => {
     const photo = takePhoto();
-    setCapturedPhoto(photo);
     setStep('loading');
     setError('');
 
     try {
-      const pos = await new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(resolve, () => resolve({ coords: { latitude: 0, longitude: 0 } }));
-      });
+      const pos = await getPositionFast();
 
-      const resFichada = await fetchApi({
-        action: 'fichar',
-        usuario_id: validatedUserId,
+      enqueueFichada({
         dni: dni,
         locationId,
         tipo: selectedAction.value,
@@ -109,18 +115,21 @@ export default function KioskMode({ locationId, onLogout }) {
         longitud: pos.coords.longitude
       });
 
-      if (resFichada.success) {
-        setLastEntry({ nombre: "Personal Nahuel", tipo: selectedAction.label, hora: new Date().toLocaleTimeString() });
-        setStep('success');
-        setDni('');
-        setSelectedAction(null);
-        setTimeout(() => setStep('dni'), 4000);
-      } else {
-          setError(resFichada.error || 'Error al fichar');
-          setStep('photo');
-      }
+      processFichadasQueue();
+
+      setLastEntry({
+        nombre: `DNI ${dni}`,
+        tipo: selectedAction.label,
+        hora: new Date().toLocaleTimeString(),
+        estado: 'Pendiente de sincronizacion'
+      });
+      setStep('success');
+      setDni('');
+      setSelectedAction(null);
+      setTimeout(() => setStep('dni'), 4000);
     } catch (err) {
-      setError('Error de envío');
+      console.error('Error guardando fichada en cola:', err);
+      setError('No se pudo guardar la fichada localmente');
       setStep('photo');
     }
   };
@@ -137,8 +146,8 @@ export default function KioskMode({ locationId, onLogout }) {
             <Loader2 className="animate-spin text-blue-600" size={40} strokeWidth={2.5} />
           </div>
         </div>
-        <h3 className="text-3xl font-black text-white tracking-widest uppercase italic">VERIFICANDO</h3>
-        <p className="text-blue-400 font-bold text-[10px] uppercase tracking-[0.4em] mt-4 opacity-70">Enviando datos al servidor</p>
+        <h3 className="text-3xl font-black text-white tracking-widest uppercase italic">REGISTRANDO</h3>
+        <p className="text-blue-400 font-bold text-[10px] uppercase tracking-[0.4em] mt-4 opacity-70">Guardando registro en cola local</p>
       </div>
     );
   }
@@ -159,19 +168,16 @@ export default function KioskMode({ locationId, onLogout }) {
                 <span>Hora</span>
                 <span className="text-slate-900">{lastEntry?.hora}</span>
             </div>
+            <div className="flex justify-between items-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <span>Estado</span>
+                <span className="text-amber-600">{lastEntry?.estado}</span>
+            </div>
         </div>
       </div>
     );
   }
 
   if (step === 'actions') {
-      const actions = [
-          { label: 'Inicio de\nJornada', value: 'Inicio de Jornada', icon: <PlayCircle size={44} strokeWidth={1} />, color: 'border-emerald-500/20 bg-emerald-50/30 text-emerald-900' },
-          { label: 'Fin de\nJornada', value: 'Fin de Jornada', icon: <StopCircle size={44} strokeWidth={1} />, color: 'border-rose-500/20 bg-rose-50/30 text-rose-900' },
-          { label: 'Inicio\nBreak', value: 'Inicio Break', icon: <Coffee size={44} strokeWidth={1} />, color: 'border-amber-500/20 bg-amber-50/30 text-amber-900' },
-          { label: 'Fin\nBreak', value: 'Fin Break', icon: <History size={44} strokeWidth={1} />, color: 'border-blue-500/20 bg-blue-50/40 text-blue-900' },
-      ];
-
       return (
           <div className="flex-1 flex flex-col p-8 fade-up bg-white">
               <header className="mb-10 text-center">
@@ -180,7 +186,7 @@ export default function KioskMode({ locationId, onLogout }) {
               </header>
 
               <div className="flex-1 grid grid-cols-2 gap-5 place-content-center">
-                  {actions.map((act, i) => (
+                  {ACTIONS.map((act, i) => (
                       <button
                         key={i}
                         onClick={() => { setSelectedAction(act); setStep('photo'); }}
