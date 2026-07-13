@@ -107,6 +107,8 @@ function App() {
   }, []);
 
   const isDashboard = view === 'dashboard';
+  const showCompactDashboardHeader = isDashboard;
+  const showCompactAppHeader = view !== 'kiosk' && !isDashboard;
 
   return (
     <div className={`${isDashboard ? 'fixed inset-0 items-center overflow-hidden' : 'relative min-h-[100dvh] items-start overflow-x-hidden'} bg-[#020617] flex justify-center font-['Montserrat']`}>
@@ -117,10 +119,9 @@ function App() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-indigo-600/30 blur-[160px] rounded-full animate-pulse delay-1000" />
       </div>
 
-      <main className={isDashboard ? 'dashboard-legacy-container' : 'app-container'}>
+      <main className={isDashboard ? 'dashboard-container' : 'app-container'}>
 
-        {/* Header Branding */}
-        {view !== 'kiosk' && (
+        {showCompactAppHeader && (
           <header className="px-8 pt-10 pb-6 text-center relative flex-shrink-0 bg-white">
             <div className="absolute top-10 right-6 z-50">
               {view !== 'login' && (
@@ -146,7 +147,31 @@ function App() {
           </header>
         )}
 
-        <div className={isDashboard ? 'flex-1 flex flex-col relative overflow-hidden bg-white' : 'relative flex flex-1 flex-col bg-white'}>
+        {showCompactDashboardHeader && (
+          <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:px-6 md:py-4">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                Lavadero Nahuel
+              </p>
+              <h1 className="truncate text-lg font-black uppercase italic tracking-tight text-slate-900 md:text-xl">
+                Horas trabajadas
+              </h1>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              title="Cerrar Sesión"
+            >
+              <span className="hidden sm:inline">Cerrar sesión</span>
+              <span className="sm:hidden">
+                <LogOut size={18} strokeWidth={2.25} />
+              </span>
+            </button>
+          </header>
+        )}
+
+        <div className={`relative flex flex-1 flex-col ${isDashboard ? 'overflow-hidden bg-[#f5f7fa]' : 'bg-white'}`}>
           {view === 'login' && <Login onLoginSuccess={handleLoginSuccess} />}
           {view === 'location' && (
             <LocationSelector
@@ -170,7 +195,7 @@ function App() {
           )}
         </div>
 
-        {view !== 'kiosk' && (
+        {showCompactAppHeader && (
           <footer className="py-6 bg-white shrink-0">
             <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em] text-center">
               © 2026 NAHUEL • BUILT BY ID SMART
