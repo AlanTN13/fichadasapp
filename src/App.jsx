@@ -146,7 +146,9 @@ function App() {
             />
           )}
           {view === 'kiosk' && <KioskMode locationId={locationId} onLogout={handleLogout} />}
-          {view === 'dashboard' && <Dashboard userEmail={userEmail} />}
+          {view === 'dashboard' && (
+            <Dashboard userEmail={userEmail} onLogout={handleLogout} />
+          )}
         </div>
 
         {view !== 'kiosk' && (
