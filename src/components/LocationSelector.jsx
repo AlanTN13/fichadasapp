@@ -1,31 +1,36 @@
 import { useState, useEffect } from 'react';
-import { fetchApi } from '../api';
 import { MapPin, ArrowRight, Loader2 } from 'lucide-react';
+import { getLocationsForEmail } from '../services/supabaseApi';
 
-export default function LocationSelector({ onSelectLocation, email }) {
-  const [locations, setLocations] = useState([]);
+export default function LocationSelector({ onSelectLocation, email, initialLocations = [], loading = false, onRetry }) {
+  const [locations, setLocations] = useState(initialLocations);
   const [selectedLocation, setSelectedLocation] = useState('');
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    setLocations(initialLocations);
+  }, [initialLocations]);
+
+  useEffect(() => {
+    if (initialLocations.length > 0) {
+      return;
+    }
+
     let isMounted = true;
     const fetchLocations = async () => {
       try {
-        const response = await fetchApi({ action: 'getUbicaciones', email });
+        const response = await getLocationsForEmail(email);
         if (isMounted) {
-          const data = Array.isArray(response) ? response : (response.ubicaciones || []);
-          setLocations(data);
+          setLocations(response);
+          setError(null);
         }
-      } catch (err) {
+      } catch {
         if (isMounted) setError("Error al cargar las ubicaciones.");
-      } finally {
-        if (isMounted) setLoading(false);
       }
     };
     fetchLocations();
     return () => { isMounted = false };
-  }, [email]);
+  }, [email, initialLocations]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -56,6 +61,21 @@ export default function LocationSelector({ onSelectLocation, email }) {
       </div>
       
       <form onSubmit={handleSubmit} className="w-full space-y-10">
+        {error && (
+          <div className="flex items-center justify-between gap-3 text-rose-600 text-[11px] py-4 px-5 bg-rose-50 rounded-2xl border border-rose-100 font-bold uppercase tracking-wider fade-up">
+            <span>{error}</span>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                Reintentar
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="relative group">
           <div className="absolute -top-3 left-6 px-3 bg-white text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] z-10 border-l border-r border-slate-100">
             Sedes Disponibles
@@ -82,7 +102,7 @@ export default function LocationSelector({ onSelectLocation, email }) {
 
         <button
           type="submit"
-          disabled={!selectedLocation}
+          disabled={!selectedLocation || locations.length === 0}
           className="w-full btn-premium bg-slate-900 rounded-[2rem] text-white font-black py-6 px-8 text-lg flex items-center justify-center transition-all shadow-2xl shadow-slate-900/30 active:translate-y-1 uppercase tracking-widest italic"
         >
           <span className="flex items-center">

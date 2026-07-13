@@ -1,17 +1,20 @@
-import { fetchApi } from './api';
+import { getDeviceId } from './lib/device';
+import { compressPhoto } from './lib/photo';
+import { setCachedKioskState } from './lib/kioskCache';
+import { recordTimeEntry, uploadTimeEntryPhoto } from './services/supabaseApi';
 
-const STORAGE_KEY = 'fichadas_queue_v1';
-const MAX_ATTEMPTS = 5;
-const RETRY_BASE_MS = 5000;
+const STORAGE_KEY = 'fichadas_queue_v2';
+const BACKOFF_BASE_MS = 4000;
+const MAX_ATTEMPTS = 6;
 
-let isProcessing = false;
+let isSyncing = false;
 
 function readQueue() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch (error) {
-    console.error('Error leyendo cola de fichadas:', error);
+    console.error('Error leyendo cola:', error);
     return [];
   }
 }
@@ -21,24 +24,48 @@ function writeQueue(queue) {
   window.dispatchEvent(new CustomEvent('fichadas-queue-updated', { detail: queue }));
 }
 
-function updateItem(queue, id, updater) {
-  return queue.map((item) => (item.id === id ? updater(item) : item));
-}
-
 function getBackoffMs(attempts) {
-  return RETRY_BASE_MS * Math.max(1, attempts);
+  return BACKOFF_BASE_MS * Math.max(1, attempts);
 }
 
-export function enqueueFichada(payload) {
+function replaceItem(queue, itemId, updater) {
+  return queue.map((item) => (item.id === itemId ? updater(item) : item));
+}
+
+export function getQueueItems() {
+  return readQueue();
+}
+
+export function getQueueSummary() {
+  const items = readQueue();
+  return {
+    pending: items.filter((item) => item.status === 'pending').length,
+    syncing: items.filter((item) => item.status === 'syncing').length,
+    failed: items.filter((item) => item.status === 'failed').length,
+    confirmed: items.filter((item) => item.status === 'confirmed').length,
+    items,
+  };
+}
+
+export async function enqueueFichada(payload) {
   const queue = readQueue();
+  const compressedPhoto = await compressPhoto(payload.photoDataUrl);
   const item = {
     id: crypto.randomUUID(),
+    idempotencyKey: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    lastAttemptAt: null,
     attempts: 0,
-    nextAttemptAt: Date.now(),
     status: 'pending',
     lastError: null,
-    payload,
+    requestedEvent: payload.requestedEvent,
+    payload: {
+      ...payload,
+      photoDataUrl: compressedPhoto,
+      deviceId: payload.deviceId || getDeviceId(),
+      syncSource: payload.syncSource || 'kiosk-web',
+    },
   };
 
   queue.push(item);
@@ -46,99 +73,121 @@ export function enqueueFichada(payload) {
   return item;
 }
 
-export function getQueueSummary() {
+export function markQueueItemRetry(itemId) {
   const queue = readQueue();
-  const activeItems = queue.filter((item) => item.status !== 'sent');
+  writeQueue(
+    replaceItem(queue, itemId, (item) => ({
+      ...item,
+      status: 'pending',
+      lastError: null,
+      updatedAt: new Date().toISOString(),
+    }))
+  );
+}
+
+export function clearConfirmedQueueItems() {
+  const queue = readQueue().filter((item) => item.status !== 'confirmed');
+  writeQueue(queue);
+}
+
+async function syncQueueItem(item) {
+  const { payload } = item;
+
+  const photoUpload = await uploadTimeEntryPhoto({
+    dataUrl: payload.photoDataUrl,
+    employeeId: payload.employeeId,
+    businessDate: payload.businessDate,
+    idempotencyKey: item.idempotencyKey,
+  });
+
+  const result = await recordTimeEntry({
+    dni: payload.dni,
+    locationId: payload.locationId,
+    requestedEvent: payload.requestedEvent,
+    idempotencyKey: item.idempotencyKey,
+    photoPath: photoUpload.photoPath,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
+    deviceId: payload.deviceId,
+    syncSource: payload.syncSource,
+  });
 
   return {
-    total: activeItems.length,
-    pending: activeItems.filter((item) => item.status === 'pending').length,
-    failed: activeItems.filter((item) => item.status === 'failed').length,
+    result,
+    photoWarning: photoUpload.photoWarning,
   };
 }
 
-async function processQueueItem(item) {
-  let usuarioId = item.payload.usuario_id ?? null;
-
-  if (!usuarioId) {
-    const validation = await fetchApi(
-      { action: 'validarDNI', dni: item.payload.dni },
-      { timeout: 8000 }
-    );
-
-    if (!validation.success || !validation.usuario_id) {
-      throw new Error(validation.error || 'No se pudo validar el DNI');
-    }
-
-    usuarioId = validation.usuario_id;
-  }
-
-  const result = await fetchApi(
-    {
-      action: 'fichar',
-      ...item.payload,
-      usuario_id: usuarioId,
-    },
-    { timeout: 12000 }
-  );
-
-  if (!result.success) {
-    throw new Error(result.error || 'No se pudo sincronizar la fichada');
-  }
-}
-
-export async function processFichadasQueue() {
-  if (isProcessing) return;
+/**
+ * @param {{onItemConfirmed?: (item: any, result: any, photoWarning: string | null) => void, onItemFailed?: (item: any, error: Error) => void}=} callbacks
+ */
+export async function syncQueuedEntries({ onItemConfirmed, onItemFailed } = {}) {
+  if (isSyncing) return [];
 
   const queue = readQueue();
-  const nextItem = queue.find(
-    (item) => item.status !== 'sent' && Date.now() >= (item.nextAttemptAt ?? 0)
+  const candidates = queue.filter(
+    (item) =>
+      item.status === 'pending' ||
+      (item.status === 'failed' && item.attempts < MAX_ATTEMPTS)
   );
 
-  if (!nextItem) return;
+  if (candidates.length === 0) return [];
 
-  isProcessing = true;
+  isSyncing = true;
+  const confirmations = [];
 
   try {
-    writeQueue(
-      updateItem(queue, nextItem.id, (item) => ({
-        ...item,
-        status: 'processing',
-        lastError: null,
-      }))
-    );
+    for (const candidate of candidates) {
+      writeQueue(
+        replaceItem(readQueue(), candidate.id, (item) => ({
+          ...item,
+          status: 'syncing',
+          lastError: null,
+          updatedAt: new Date().toISOString(),
+          lastAttemptAt: new Date().toISOString(),
+        }))
+      );
 
-    await processQueueItem(nextItem);
+      try {
+        const { result, photoWarning } = await syncQueueItem(candidate);
+        confirmations.push(result);
+        setCachedKioskState(candidate.payload.dni, result.state);
 
-    const updatedQueue = readQueue().filter((item) => item.id !== nextItem.id);
-    writeQueue(updatedQueue);
-  } catch (error) {
-    console.error('Error procesando cola de fichadas:', error);
+        writeQueue(
+          replaceItem(readQueue(), candidate.id, (item) => ({
+            ...item,
+            status: 'confirmed',
+            lastError: photoWarning,
+            updatedAt: new Date().toISOString(),
+            serverResult: result,
+          }))
+        );
 
-    const currentQueue = readQueue();
-    const attempts = (nextItem.attempts ?? 0) + 1;
-    const status = attempts >= MAX_ATTEMPTS ? 'failed' : 'pending';
+        if (onItemConfirmed) {
+          onItemConfirmed(candidate, result, photoWarning);
+        }
+      } catch (error) {
+        const attempts = candidate.attempts + 1;
+        const status = attempts >= MAX_ATTEMPTS ? 'failed' : 'pending';
+        writeQueue(
+          replaceItem(readQueue(), candidate.id, (item) => ({
+            ...item,
+            attempts,
+            status,
+            lastError: error.message,
+            nextRetryAt: Date.now() + getBackoffMs(attempts),
+            updatedAt: new Date().toISOString(),
+          }))
+        );
 
-    writeQueue(
-      updateItem(currentQueue, nextItem.id, (item) => ({
-        ...item,
-        attempts,
-        status,
-        lastError: error.message,
-        nextAttemptAt: Date.now() + getBackoffMs(attempts),
-      }))
-    );
-  } finally {
-    isProcessing = false;
-
-    const stillPending = readQueue().some(
-      (item) => item.status !== 'sent' && item.status !== 'failed' && Date.now() >= (item.nextAttemptAt ?? 0)
-    );
-
-    if (stillPending) {
-      setTimeout(() => {
-        processFichadasQueue();
-      }, 0);
+        if (onItemFailed) {
+          onItemFailed(candidate, error);
+        }
+      }
     }
+  } finally {
+    isSyncing = false;
   }
+
+  return confirmations;
 }
