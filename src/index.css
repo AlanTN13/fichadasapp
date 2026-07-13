@@ -25,6 +25,12 @@
     @apply sm:max-w-[480px] sm:h-[850px] sm:rounded-[3rem] sm:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.5)] sm:border-[12px] sm:border-white;
   }
 
+  .dashboard-container {
+    @apply w-full min-h-[100dvh] flex flex-col bg-[#f5f7fa] overflow-hidden;
+    @apply sm:h-[100dvh] sm:max-w-none sm:rounded-none sm:border-0 sm:shadow-none;
+    @apply lg:mx-auto lg:max-w-[1400px] lg:px-5 lg:py-5;
+  }
+
   .premium-card {
     @apply bg-white rounded-[2.5rem] border border-slate-100/50 shadow-sm transition-all duration-300;
   }
