@@ -165,7 +165,9 @@ function App() {
               onBackToLocations={handleBackToLocations}
             />
           )}
-          {view === 'dashboard' && <Dashboard userEmail={userEmail} />}
+          {view === 'dashboard' && (
+            <Dashboard userEmail={userEmail} onLogout={handleLogout} />
+          )}
         </div>
 
         {view !== 'kiosk' && (
