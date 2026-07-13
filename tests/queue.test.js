@@ -62,6 +62,31 @@ describe('sync queue', () => {
     expect(getQueueItems()[0].status).toBe('confirmed');
   });
 
+  it('sube la foto usando employeeId y businessDate del estado validado', async () => {
+    vi.mocked(recordTimeEntry).mockResolvedValue({
+      success: true,
+      state: { employee_name: 'Nahuel Molina' },
+    });
+
+    await enqueueFichada({
+      dni: '40732253',
+      locationId: 'loc-1',
+      employeeId: 'emp-123',
+      businessDate: '2026-07-13',
+      requestedEvent: 'START',
+      photoDataUrl: 'data:image/jpeg;base64,abc',
+    });
+
+    await syncQueuedEntries();
+
+    expect(uploadTimeEntryPhoto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        employeeId: 'emp-123',
+        businessDate: '2026-07-13',
+      })
+    );
+  });
+
   it('permite limpiar confirmados luego de sincronizar', async () => {
     vi.mocked(recordTimeEntry).mockResolvedValue({
       success: true,

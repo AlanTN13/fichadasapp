@@ -186,6 +186,8 @@ export default function KioskMode({ locationId, onLogout }) {
       const queuedItem = await enqueueFichada({
         dni,
         locationId,
+        employeeId: stateLookup?.employee_id,
+        businessDate: stateLookup?.business_date,
         requestedEvent: selectedAction.value,
         photoDataUrl,
         latitude: position.coords.latitude,
