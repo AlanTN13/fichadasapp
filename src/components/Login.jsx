@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { fetchApi } from '../api';
-import { Mail, ArrowRight, Loader2, KeyRound } from 'lucide-react';
+import { Mail, ArrowRight, Loader2 } from 'lucide-react';
+import { loginWithEmail } from '../services/supabaseApi';
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
@@ -18,14 +18,10 @@ export default function Login({ onLoginSuccess }) {
     setError(null);
     
     try {
-      const response = await fetchApi({ action: "login", email });
-      if (response && response.success) {
-        onLoginSuccess(response.role, email);
-      } else {
-        setError(response.error || "Email no autorizado o inactivo.");
-      }
+      const response = await loginWithEmail(email);
+      onLoginSuccess(response, email);
     } catch (err) {
-      setError("Error de conexión con el servidor.");
+      setError(err.message || "Error de conexión con el servidor.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -38,8 +34,12 @@ export default function Login({ onLoginSuccess }) {
       {/* Animated Icon Container */}
       <div className="mb-12 relative">
         <div className="absolute inset-0 bg-blue-600/10 blur-[80px] rounded-full scale-150 animate-pulse" />
-        <div className="relative w-28 h-28 rounded-[2.75rem] bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center text-white shadow-2xl shadow-slate-900/40 transform hover:scale-105 transition-all duration-500 border border-white/10">
-          <KeyRound size={48} strokeWidth={2} />
+        <div className="relative flex items-center justify-center transform hover:scale-105 transition-all duration-500">
+          <img
+            src="/nahuel-logo.png"
+            alt="Lavadero Industrial Nahuel"
+            className="w-40 h-40 object-contain drop-shadow-[0_20px_45px_rgba(15,23,42,0.18)]"
+          />
         </div>
       </div>
 

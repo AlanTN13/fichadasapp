@@ -4,21 +4,67 @@ import Login from './components/Login';
 import LocationSelector from './components/LocationSelector';
 import KioskMode from './components/KioskMode';
 import Dashboard from './components/Dashboard';
-import { processFichadasQueue } from './queue';
+import { getLocationsForEmail } from './services/supabaseApi';
+import { clearConfirmedQueueItems, syncQueuedEntries } from './queue';
 
 function App() {
   const [view, setView] = useState('login'); // 'login', 'location', 'kiosk', 'dashboard'
   const [locationId, setLocationId] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
+  const [locations, setLocations] = useState([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
 
-  const handleLoginSuccess = (role, email) => {
+  const loadLocations = async (email) => {
+    setLocationsLoading(true);
+
+    try {
+      const data = await getLocationsForEmail(email);
+      setLocations(data);
+      return data;
+    } catch (error) {
+      console.error('Error precargando sedes:', error);
+      setLocations([]);
+      throw error;
+    } finally {
+      setLocationsLoading(false);
+    }
+  };
+
+  const handleLoginSuccess = async (loginContext, email) => {
     setUserEmail(email);
-    if (role === 'super_admin') {
+    if (loginContext.role === 'super_admin') {
       setView('dashboard');
     } else {
       setView('location');
+      if (Array.isArray(loginContext.locations) && loginContext.locations.length > 0) {
+        setLocations(loginContext.locations);
+      } else {
+        loadLocations(email).catch(() => {});
+      }
     }
   };
+
+  const handleLogout = () => {
+    setUserEmail(null);
+    setLocations([]);
+    setLocationsLoading(false);
+    setLocationId(null);
+    setView('login');
+  };
+
+  const handleRetryLocations = () => {
+    if (!userEmail) return;
+
+    loadLocations(userEmail).catch(() => {});
+  };
+
+  useEffect(() => {
+    if (view !== 'location' || !userEmail || locations.length > 0 || locationsLoading) {
+      return;
+    }
+
+    loadLocations(userEmail).catch(() => {});
+  }, [view, userEmail, locations.length, locationsLoading]);
 
   const handleLocationSelect = (locId) => {
     setLocationId(locId);
@@ -26,14 +72,20 @@ function App() {
   };
 
   useEffect(() => {
-    processFichadasQueue();
+    syncQueuedEntries().then(() => {
+      clearConfirmedQueueItems();
+    }).catch(() => {});
 
     const interval = setInterval(() => {
-      processFichadasQueue();
+      syncQueuedEntries().then(() => {
+        clearConfirmedQueueItems();
+      }).catch(() => {});
     }, 5000);
 
     const handleOnline = () => {
-      processFichadasQueue();
+      syncQueuedEntries().then(() => {
+        clearConfirmedQueueItems();
+      }).catch(() => {});
     };
 
     window.addEventListener('online', handleOnline);
@@ -61,7 +113,7 @@ function App() {
             <div className="absolute top-10 right-6 z-50">
               {view !== 'login' && (
                 <button
-                  onClick={() => setView('login')}
+                  onClick={handleLogout}
                   className="w-11 h-11 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-90 border border-rose-100 shadow-sm"
                   title="Cerrar Sesión"
                 >
@@ -84,9 +136,17 @@ function App() {
 
         <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
           {view === 'login' && <Login onLoginSuccess={handleLoginSuccess} />}
-          {view === 'location' && <LocationSelector onSelectLocation={handleLocationSelect} email={userEmail} />}
-          {view === 'kiosk' && <KioskMode locationId={locationId} onLogout={() => setView('login')} />}
-          {view === 'dashboard' && <Dashboard onLogout={() => setView('login')} email={userEmail} />}
+          {view === 'location' && (
+            <LocationSelector
+              onSelectLocation={handleLocationSelect}
+              email={userEmail}
+              initialLocations={locations}
+              loading={locationsLoading}
+              onRetry={handleRetryLocations}
+            />
+          )}
+          {view === 'kiosk' && <KioskMode locationId={locationId} onLogout={handleLogout} />}
+          {view === 'dashboard' && <Dashboard userEmail={userEmail} />}
         </div>
 
         {view !== 'kiosk' && (
