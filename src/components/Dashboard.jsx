@@ -294,9 +294,30 @@ export default function Dashboard({ userEmail }) {
                           key={`${row.employeeId}-${cell.key}`}
                           className={`border-b border-r border-slate-200 px-3 py-4 text-center ${
                             cell.isWeekend ? 'bg-slate-100/70' : ''
-                          } ${cell.displayValue === 'Sin cierre' ? 'text-amber-700' : 'text-slate-700'}`}
+                          } text-slate-700`}
                         >
-                          {cell.displayValue}
+                          <div className="mx-auto flex min-w-[88px] max-w-[104px] flex-col gap-1 text-left">
+                            <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-slate-400">
+                              <span>Ing</span>
+                              <span className="font-medium text-slate-600">{cell.details.entryLabel}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-slate-400">
+                              <span>Sal</span>
+                              <span
+                                className={`font-medium ${
+                                  cell.details.exitLabel === 'Sin cierre'
+                                    ? 'text-amber-700'
+                                    : 'text-slate-600'
+                                }`}
+                              >
+                                {cell.details.exitLabel}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-1 text-[10px] uppercase tracking-wide text-slate-400">
+                              <span>Hs</span>
+                              <span className="font-semibold text-slate-900">{cell.details.hoursLabel}</span>
+                            </div>
+                          </div>
                         </td>
                       ))}
                       <td className="border-b border-r border-slate-200 px-3 py-4 text-center font-medium text-slate-900">

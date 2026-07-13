@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildDailyHoursCell,
   buildHoursDashboardRows,
   formatDailyHoursCell,
   formatHoursMinutes,
@@ -19,7 +20,7 @@ describe('dashboard hours helpers', () => {
 
   it('devuelve sin cierre cuando falta END', () => {
     expect(formatDailyHoursCell({ state: 'WORKING', worked_hours: null })).toBe(
-      'Sin cierre'
+      '—'
     );
   });
 
@@ -61,10 +62,29 @@ describe('dashboard hours helpers', () => {
       dateColumns
     );
 
-    expect(rows[0].dayCells[0].displayValue).toBe('08:05');
-    expect(rows[0].dayCells[1].displayValue).toBe('Sin cierre');
+    expect(rows[0].dayCells[0].details.entryLabel).toBe('—');
+    expect(rows[0].dayCells[0].details.hoursLabel).toBe('08:05');
+    expect(rows[0].dayCells[1].details.exitLabel).toBe('Sin cierre');
+    expect(rows[0].dayCells[1].details.hoursLabel).toBe('—');
     expect(rows[0].periodTotalLabel).toBe('15:45');
     expect(rows[0].fortnightTotalLabel).toBe('40:30');
+  });
+
+  it('muestra ingreso, salida y horas cuando la jornada esta completa', () => {
+    expect(
+      buildDailyHoursCell({
+        state: 'COMPLETED',
+        start_time: '08:11',
+        end_time: '17:03',
+        worked_hours: 8.8666,
+      })
+    ).toEqual({
+      entryLabel: '08:11',
+      exitLabel: '17:03',
+      hoursLabel: '08:52',
+      status: 'COMPLETED',
+      hasEntry: true,
+    });
   });
 
   it('detecta cuando no hay fichadas en el periodo', () => {

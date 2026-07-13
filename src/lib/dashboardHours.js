@@ -16,21 +16,49 @@ export function formatHoursMinutes(hours, fallback = '00:00') {
   return `${hh}:${mm}`;
 }
 
-export function formatDailyHoursCell(day) {
+export function buildDailyHoursCell(day) {
   if (!day) {
-    return '—';
+    return {
+      entryLabel: '—',
+      exitLabel: '—',
+      hoursLabel: '—',
+      status: 'NOT_STARTED',
+      hasEntry: false,
+    };
   }
 
   if (day.state === 'WORKING') {
-    return 'Sin cierre';
+    return {
+      entryLabel: day.start_time || '—',
+      exitLabel: 'Sin cierre',
+      hoursLabel: '—',
+      status: 'WORKING',
+      hasEntry: true,
+    };
   }
 
   const safeHours = sanitizeHours(day.worked_hours);
   if (safeHours == null) {
-    return '—';
+    return {
+      entryLabel: day.start_time || '—',
+      exitLabel: day.end_time || '—',
+      hoursLabel: '—',
+      status: day.state || 'NOT_STARTED',
+      hasEntry: false,
+    };
   }
 
-  return formatHoursMinutes(safeHours);
+  return {
+    entryLabel: day.start_time || '—',
+    exitLabel: day.end_time || '—',
+    hoursLabel: formatHoursMinutes(safeHours),
+    status: day.state || 'COMPLETED',
+    hasEntry: true,
+  };
+}
+
+export function formatDailyHoursCell(day) {
+  return buildDailyHoursCell(day).hoursLabel;
 }
 
 export function sumWorkedHours(items) {
@@ -62,7 +90,8 @@ export function buildHoursDashboardRows(rows, dateColumns) {
         state: day?.state || 'NOT_STARTED',
         workedHours: sanitizeHours(day?.worked_hours ?? null),
         displayValue: day?.displayValue || '—',
-        hasEntry: Boolean(day) && (day.state === 'WORKING' || sanitizeHours(day.worked_hours) != null),
+        details: buildDailyHoursCell(day),
+        hasEntry: buildDailyHoursCell(day).hasEntry,
       };
     });
 
