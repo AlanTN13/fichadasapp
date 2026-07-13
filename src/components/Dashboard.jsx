@@ -22,7 +22,7 @@ const PERIOD_OPTIONS = [
   PERIOD_PRESETS.CUSTOM,
 ];
 
-export default function Dashboard({ userEmail, onLogout, onBack = null }) {
+export default function Dashboard({ userEmail }) {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -121,27 +121,19 @@ export default function Dashboard({ userEmail, onLogout, onBack = null }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col bg-[#f5f7fa] px-4 py-4 md:px-6 md:py-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4">
-        <header className="rounded-2xl border border-slate-200 bg-white p-4 md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f5f7fa] px-3 py-3 md:px-5 md:py-4">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col gap-3">
+        <header className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+          <div className="flex flex-col gap-2">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Horas trabajadas</h1>
+              <h1 className="text-xl font-bold text-slate-900 md:text-2xl">Horas trabajadas</h1>
               <p className="mt-1 text-sm text-slate-500">
                 {selectedPeriod.displayLabel}
               </p>
             </div>
-
-            <button
-              type="button"
-              onClick={onBack || onLogout}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
-            >
-              {onBack ? 'Volver al kiosco' : 'Cerrar sesion'}
-            </button>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,220px)_minmax(0,220px)_auto]">
+          <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,220px)_minmax(0,220px)_auto]">
             <label className="flex flex-col gap-1 text-sm text-slate-600">
               <span className="font-medium">Sede</span>
               <select
@@ -258,14 +250,14 @@ export default function Dashboard({ userEmail, onLogout, onBack = null }) {
             No hay empleados para la sede seleccionada.
           </section>
         ) : (
-          <section className="rounded-2xl border border-slate-200 bg-white">
+          <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white">
             {showEmptyEntriesMessage && (
               <div className="border-b border-slate-200 px-4 py-3 text-sm text-slate-500">
                 No hay fichadas para el periodo seleccionado.
               </div>
             )}
 
-            <div className="overflow-auto">
+            <div className="min-h-0 flex-1 overflow-auto">
               <table className="min-w-full border-collapse text-sm text-slate-700">
                 <thead>
                   <tr className="bg-slate-50">
