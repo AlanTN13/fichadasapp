@@ -52,6 +52,7 @@ export default function Dashboard({ userEmail }) {
   const rows = dashboard?.rows || [];
   const metrics = dashboard?.metrics || {};
   const locationOptions = dashboard?.locations || [];
+  const isFilteredDate = Boolean(filters.date);
 
   return (
     <div className="flex flex-col flex-1 bg-[#f8fafc] overflow-y-auto fade-up">
@@ -70,11 +71,11 @@ export default function Dashboard({ userEmail }) {
 
       <section className="px-8 mt-4 grid grid-cols-2 gap-4">
         {[
-          ['Ficharon hoy', metrics.checked_in_today ?? 0],
+          [isFilteredDate ? 'Ficharon en fecha' : 'Ficharon hoy', metrics.checked_in_today ?? 0],
           ['No ficharon', metrics.not_checked_in ?? 0],
           ['Trabajando', metrics.working ?? 0],
           ['Finalizada', metrics.completed ?? 0],
-          ['Horas del dia', metrics.total_worked_hours_label ?? '00:00'],
+          [isFilteredDate ? 'Horas de la fecha' : 'Horas del dia', metrics.total_worked_hours_label ?? '00:00'],
         ].map(([label, value]) => (
           <div key={label} className="bg-white rounded-[1.75rem] border border-slate-100 p-4 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{label}</p>
@@ -181,46 +182,50 @@ export default function Dashboard({ userEmail }) {
                    <p className="text-[11px] font-bold text-slate-300 uppercase tracking-widest">Sin actividad registrada</p>
                 </div>
               ) : (
-                rows.map((f, i) => (
-                  <div key={i} className={`px-8 py-8 flex flex-col border-b border-slate-50 last:border-0 hover:bg-slate-50/30 transition-colors`}>
-                    
-                    {/* Header: Acción y Hora */}
-                    <div className="flex items-center justify-between mb-4">
-                        <div className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 ${
-                          f.status === 'WORKING'
-                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                          : f.status === 'COMPLETED'
-                            ? 'bg-blue-50 text-blue-600 border-blue-100'
-                            : f.status === 'PENDING_SYNC'
-                              ? 'bg-amber-50 text-amber-600 border-amber-100'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}>
-                          {f.status_label || f.status}
-                        </div>
-                        <div className="flex items-center text-slate-400 font-bold text-[11px] uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-xl">
-                            <Clock size={12} className="mr-2" />
-                            <span>{f.start_time || '--:--'} / {f.end_time || 'En curso'}</span>
-                        </div>
-                    </div>
+                rows.map((f, i) => {
+                  const isHistoricalIncomplete = f.status_label === 'Jornada incompleta';
 
-                    {/* Cuerpo: Nombre Principal */}
-                    <div className="mb-3">
-                        <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">
-                            {f.employee_name || 'Nombre No Encontrado'}
-                        </h4>
-                    </div>
-
-                    {/* Footer: Identificación DNI */}
-                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] gap-4">
-                      <div className="flex items-center">
-                        <Fingerprint size={12} className="mr-2 text-blue-500" />
-                        <span>DNI REGISTRADO: {f.dni || '---'}</span>
+                  return (
+                    <div key={i} className={`px-8 py-8 flex flex-col border-b border-slate-50 last:border-0 hover:bg-slate-50/30 transition-colors`}>
+                      {/* Header: Acción y Hora */}
+                      <div className="flex items-center justify-between mb-4">
+                          <div className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 ${
+                            isHistoricalIncomplete
+                            ? 'bg-amber-50 text-amber-600 border-amber-100'
+                            : f.status === 'WORKING'
+                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                            : f.status === 'COMPLETED'
+                              ? 'bg-blue-50 text-blue-600 border-blue-100'
+                              : f.status === 'PENDING_SYNC'
+                                ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {f.status_label || f.status}
+                          </div>
+                          <div className="flex items-center text-slate-400 font-bold text-[11px] uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-xl">
+                              <Clock size={12} className="mr-2" />
+                              <span>{f.start_time || '--:--'} / {f.end_time || (isHistoricalIncomplete ? 'Sin cierre' : 'En curso')}</span>
+                          </div>
                       </div>
-                      <span>{formatWorkedHours(f.worked_hours)}</span>
-                    </div>
 
-                  </div>
-                ))
+                      {/* Cuerpo: Nombre Principal */}
+                      <div className="mb-3">
+                          <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">
+                              {f.employee_name || 'Nombre No Encontrado'}
+                          </h4>
+                      </div>
+
+                      {/* Footer: Identificación DNI */}
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] gap-4">
+                        <div className="flex items-center">
+                          <Fingerprint size={12} className="mr-2 text-blue-500" />
+                          <span>DNI REGISTRADO: {f.dni || '---'}</span>
+                        </div>
+                        <span>{formatWorkedHours(f.worked_hours)}</span>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
         </div>
