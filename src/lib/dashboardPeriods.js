@@ -30,6 +30,37 @@ const MONTH_LABELS = [
   'diciembre',
 ];
 
+const BUSINESS_TIME_ZONE = 'America/Argentina/Buenos_Aires';
+
+function getBusinessDateParts(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+  };
+}
+
+function toBusinessDate(date) {
+  const businessDate = getBusinessDateParts(date);
+  return new Date(
+    businessDate.year,
+    businessDate.month - 1,
+    businessDate.day,
+    12,
+    0,
+    0,
+    0
+  );
+}
+
 /**
  * @param {Date | string | number} [dateLike]
  */
@@ -165,7 +196,7 @@ export function resolveDashboardPeriod(
   preset,
   { today = new Date(), customStart = '', customEnd = '' } = {}
 ) {
-  const referenceDate = toSafeDate(today);
+  const referenceDate = today instanceof Date ? toBusinessDate(today) : toSafeDate(today);
 
   if (preset === PERIOD_PRESETS.PREVIOUS_WEEK) {
     const thisWeekStart = getStartOfWeek(referenceDate);

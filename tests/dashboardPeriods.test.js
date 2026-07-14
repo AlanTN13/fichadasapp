@@ -32,6 +32,22 @@ describe('dashboard periods', () => {
     expect(period.endDate).toBe('2026-07-19');
   });
 
+  it('resuelve la semana usando el cambio de dia de Buenos Aires', () => {
+    const beforeMidnightInBuenosAires = resolveDashboardPeriod(
+      PERIOD_PRESETS.THIS_WEEK,
+      { today: new Date('2026-07-13T01:30:00Z') }
+    );
+    const afterMidnightInBuenosAires = resolveDashboardPeriod(
+      PERIOD_PRESETS.THIS_WEEK,
+      { today: new Date('2026-07-13T03:30:00Z') }
+    );
+
+    expect(beforeMidnightInBuenosAires.startDate).toBe('2026-07-06');
+    expect(beforeMidnightInBuenosAires.endDate).toBe('2026-07-12');
+    expect(afterMidnightInBuenosAires.startDate).toBe('2026-07-13');
+    expect(afterMidnightInBuenosAires.endDate).toBe('2026-07-19');
+  });
+
   it('permite periodo personalizado y normaliza fechas invertidas', () => {
     const period = resolveDashboardPeriod(PERIOD_PRESETS.CUSTOM, {
       customStart: '2026-07-20',
