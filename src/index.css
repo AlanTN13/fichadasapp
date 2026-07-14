@@ -6,6 +6,7 @@
   * {
     -webkit-tap-highlight-color: transparent;
     user-select: none;
+    box-sizing: border-box;
   }
 
   input, select, button {
@@ -18,13 +19,13 @@
   }
 
   html, body, #root {
-    @apply min-h-full;
+    @apply min-h-full w-full max-w-full overflow-x-hidden;
   }
 }
 
 @layer components {
   .app-container {
-    @apply relative flex min-h-[100dvh] w-full flex-col bg-[#f8fafc];
+    @apply relative flex min-h-[100dvh] min-w-0 w-full max-w-full flex-col bg-[#f8fafc];
     @apply lg:my-6 lg:max-w-[1080px] lg:rounded-[2.5rem] lg:border-[10px] lg:border-white lg:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.5)];
   }
 

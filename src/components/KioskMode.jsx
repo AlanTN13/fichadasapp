@@ -112,7 +112,7 @@ function StatusNotice({
   }[tone];
 
   return (
-    <div className={`rounded-2xl border px-4 py-3 text-sm ${toneClass}`}>
+    <div className={`w-full min-w-0 max-w-full break-words rounded-2xl border px-3 py-2.5 text-sm sm:px-4 sm:py-3 ${toneClass}`}>
       <p className="font-semibold">{title}</p>
       {description && <p className="mt-1 leading-6 opacity-90">{description}</p>}
       {actionLabel && onAction && (
@@ -441,7 +441,7 @@ export default function KioskMode({
 
   if (step === 'loading' || lookupLoading) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center fade-up">
+      <div className="flex min-w-0 max-w-full flex-1 flex-col items-center justify-center gap-5 px-4 text-center fade-up sm:px-6">
         <FlowStepIndicator currentStep={2} />
         <div className="flex h-20 w-20 items-center justify-center rounded-[2rem] bg-white shadow-lg shadow-slate-200/70">
           <Loader2 className="h-9 w-9 animate-spin text-blue-600" />
@@ -462,18 +462,18 @@ export default function KioskMode({
 
   if (step === 'success') {
     return (
-      <div className="flex flex-1 flex-col bg-white px-5 pb-6 pt-4 fade-up sm:px-6">
-        <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5">
+      <div className="flex min-w-0 max-w-full flex-1 flex-col bg-white px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 fade-up sm:px-6 sm:pb-6 sm:pt-4">
+        <div className="mx-auto flex h-full min-w-0 w-full max-w-4xl flex-col gap-3 sm:gap-5">
           <FlowStepIndicator currentStep={3} />
 
-          <div className="flex flex-1 flex-col items-center justify-center rounded-[2rem] border border-emerald-200 bg-emerald-50 px-6 py-8 text-center shadow-sm">
+          <div className="flex min-w-0 flex-1 flex-col items-center justify-center rounded-[1.5rem] border border-emerald-200 bg-emerald-50 px-4 py-6 text-center shadow-sm sm:rounded-[2rem] sm:px-6 sm:py-8">
             <div className="flex h-20 w-20 items-center justify-center rounded-[2rem] bg-emerald-600 text-white shadow-lg shadow-emerald-200">
               <CheckCircle2 size={40} strokeWidth={2.2} />
             </div>
             <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
               Confirmación
             </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
+            <h2 className="mt-3 max-w-full break-words text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
               {selectedAction?.shortLabel === 'Fin de jornada'
                 ? 'Jornada finalizada correctamente'
                 : 'Jornada iniciada correctamente'}
@@ -504,25 +504,25 @@ export default function KioskMode({
     const showCameraError = cameraStatus === 'denied' || cameraStatus === 'unavailable';
 
     return (
-      <div className="flex flex-1 flex-col bg-white px-5 pb-6 pt-4 fade-up sm:px-6">
-        <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5">
+      <div className="flex min-w-0 max-w-full flex-1 flex-col bg-white px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 fade-up sm:px-6 sm:pb-6 sm:pt-4">
+        <div className="mx-auto flex h-full min-w-0 w-full max-w-4xl flex-col gap-3 sm:gap-5">
           <FlowStepIndicator currentStep={1} />
 
-          <section className="rounded-[2rem] border border-slate-200 bg-slate-50/80 p-5 shadow-sm">
+          <section className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-3 shadow-sm sm:rounded-[2rem] sm:p-5">
             <div className="flex flex-col gap-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
+              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-600">
                     Estado actual
                   </p>
-                  <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                  <h2 className="mt-2 break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
                     {employeeName}
                   </h2>
                   <p className="mt-2 text-sm text-slate-500">
                     {locationName} · {currentBusinessDate} · {currentTimeLabel}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-right">
+                <div className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-left sm:w-auto sm:shrink-0 sm:text-right">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                     Estado
                   </p>
@@ -542,17 +542,17 @@ export default function KioskMode({
             </div>
           </section>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <section className={`rounded-[2rem] border p-5 shadow-sm ${actionTone.card}`}>
-              <div className="flex items-start gap-4">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:gap-5 lg:grid-cols-2">
+            <section className={`min-w-0 rounded-[1.5rem] border p-3 shadow-sm sm:rounded-[2rem] sm:p-5 ${actionTone.card}`}>
+              <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                 <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${actionTone.icon}`}>
                   {availableAction?.icon}
                 </div>
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] opacity-70">
                     Acción disponible
                   </p>
-                  <h3 className="mt-2 text-2xl font-bold tracking-tight">
+                  <h3 className="mt-2 break-words text-xl font-bold tracking-tight sm:text-2xl">
                     {availableAction?.label}
                   </h3>
                   <p className="mt-2 text-sm leading-6 opacity-80">
@@ -565,7 +565,7 @@ export default function KioskMode({
               </div>
             </section>
 
-            <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:rounded-[2rem] sm:p-4">
               <div className="mb-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
                   Validación con foto
@@ -573,7 +573,7 @@ export default function KioskMode({
                 <p className="mt-1 text-sm text-slate-500">Mirá a cámara y tomá la foto para confirmar.</p>
               </div>
 
-              <div className="relative mx-auto max-w-xs overflow-hidden rounded-[1.5rem] bg-slate-900">
+              <div className="relative mx-auto w-full min-w-0 max-w-xs overflow-hidden rounded-[1.25rem] bg-slate-900 sm:rounded-[1.5rem]">
                 {capturedPhoto ? (
                   <img src={capturedPhoto} alt="Foto capturada" className="aspect-[4/3] w-full object-cover" />
                 ) : (
@@ -604,7 +604,7 @@ export default function KioskMode({
                     {cameraStatus === 'loading' ? 'Preparando cámara' : 'Tomar foto'}
                   </button>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 sm:gap-3">
                     <button
                       type="button"
                       onClick={retakePhoto}
@@ -626,21 +626,21 @@ export default function KioskMode({
           </div>
 
           <div className="mt-auto grid gap-3">
-            <div className="flex gap-3">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 sm:gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setError('');
                   setStep('dni');
                 }}
-                className="flex-1 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                className="w-full min-w-0 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
               >
                 Cambiar DNI
               </button>
               <button
                 type="button"
                 onClick={onBackToLocations || onLogout}
-                className="flex-1 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                className="w-full min-w-0 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
               >
                 Cambiar sede
               </button>
@@ -655,11 +655,11 @@ export default function KioskMode({
     const showCameraError = cameraStatus === 'denied' || cameraStatus === 'unavailable';
 
     return (
-      <div className="flex flex-1 flex-col bg-white px-5 pb-6 pt-4 fade-up sm:px-6">
-        <div className="mx-auto flex h-full w-full max-w-md flex-col gap-5">
+      <div className="flex min-w-0 max-w-full flex-1 flex-col bg-white px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 fade-up sm:px-6 sm:pb-6 sm:pt-4">
+        <div className="mx-auto flex h-full min-w-0 w-full max-w-md flex-col gap-3 sm:gap-5">
           <FlowStepIndicator currentStep={2} />
 
-          <section className="rounded-[2rem] border border-slate-200 bg-slate-50/80 p-5 shadow-sm">
+          <section className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-3 shadow-sm sm:rounded-[2rem] sm:p-5">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
                 <ShieldCheck size={22} strokeWidth={1.9} />
@@ -678,7 +678,7 @@ export default function KioskMode({
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm">
+          <section className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:rounded-[2rem] sm:p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-900">{employeeName}</p>
@@ -697,7 +697,7 @@ export default function KioskMode({
               </button>
             </div>
 
-            <div className="relative overflow-hidden rounded-[1.75rem] bg-slate-900">
+            <div className="relative w-full min-w-0 max-w-full overflow-hidden rounded-[1.5rem] bg-slate-900 sm:rounded-[1.75rem]">
               {capturedPhoto ? (
                 <img src={capturedPhoto} alt="Foto capturada" className="aspect-[4/5] w-full object-cover" />
               ) : (
@@ -799,18 +799,18 @@ export default function KioskMode({
   }
 
   return (
-    <div className="flex flex-1 flex-col bg-white px-3 pb-4 pt-3 fade-up sm:px-6 sm:pb-8 sm:pt-4 lg:px-10 lg:pb-10 lg:pt-8">
-      <form onSubmit={handleValidate} className="mx-auto grid w-full max-w-[1050px] flex-1 gap-3 sm:gap-5 lg:grid-cols-2 lg:items-start lg:gap-6">
-        <div className="lg:col-span-2">
+    <div className="flex min-w-0 max-w-full flex-1 flex-col bg-white px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 fade-up sm:px-6 sm:pb-8 sm:pt-4 lg:px-10 lg:pb-10 lg:pt-8">
+      <form onSubmit={handleValidate} className="mx-auto grid min-w-0 w-full max-w-full grid-cols-[minmax(0,1fr)] flex-1 gap-3 sm:gap-5 lg:max-w-[1050px] lg:grid-cols-2 lg:items-start lg:gap-6">
+        <div className="min-w-0 lg:col-span-2">
           <FlowStepIndicator currentStep={1} />
         </div>
 
-        <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-3 shadow-sm sm:rounded-[2rem] sm:p-5">
+        <section className="min-w-0 max-w-full rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-3 shadow-sm sm:rounded-[2rem] sm:p-5">
           <div className="flex items-start gap-3 sm:gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-lg shadow-slate-900/15 sm:h-14 sm:w-14 sm:rounded-2xl">
               <User className="h-5 w-5 sm:h-[26px] sm:w-[26px]" strokeWidth={1.8} />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-600">
                 Paso 2
               </p>
@@ -836,7 +836,7 @@ export default function KioskMode({
           </div>
         </section>
 
-        <section className="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:rounded-[2rem] sm:p-5">
+        <section className="min-w-0 max-w-full rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:rounded-[2rem] sm:p-5">
           <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-3 py-2.5 sm:rounded-[1.75rem] sm:px-4 sm:py-4">
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white sm:h-12 sm:w-12 sm:rounded-2xl">
@@ -861,7 +861,7 @@ export default function KioskMode({
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-4 sm:gap-3">
+          <div className="mt-3 grid min-w-0 w-full grid-cols-[repeat(3,minmax(0,1fr))] gap-1.5 sm:mt-4 sm:gap-3">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'BORRAR', 0].map((key) => (
               <button
                 key={key}
@@ -904,7 +904,7 @@ export default function KioskMode({
           </div>
         </section>
 
-        <div className="grid gap-2 sm:gap-3 lg:col-span-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:gap-3 lg:col-span-2">
           <button
             type="submit"
             disabled={!isValidDni(dni) || lookupLoading}
@@ -914,18 +914,18 @@ export default function KioskMode({
             <ChevronRight size={18} />
           </button>
 
-          <div className="flex gap-3">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 sm:gap-3">
             <button
               type="button"
               onClick={onBackToLocations || onLogout}
-              className="flex-1 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+              className="w-full min-w-0 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
             >
               Cambiar sede
             </button>
             <button
               type="button"
               onClick={onLogout}
-              className="flex-1 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+              className="w-full min-w-0 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
             >
               Cerrar sesión
             </button>
