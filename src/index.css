@@ -13,16 +13,24 @@
   }
 
   body {
-    @apply m-0 p-0 overflow-hidden bg-[#0f172a] text-[#1e293b];
+    @apply m-0 p-0 bg-[#0f172a] text-[#1e293b];
     font-family: 'Montserrat', sans-serif;
-    overscroll-behavior: none;
+  }
+
+  html, body, #root {
+    @apply min-h-full;
   }
 }
 
 @layer components {
   .app-container {
-    @apply w-full h-[100dvh] flex flex-col relative bg-[#f8fafc] overflow-hidden;
-    @apply sm:max-w-[480px] sm:h-[850px] sm:rounded-[3rem] sm:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.5)] sm:border-[12px] sm:border-white;
+    @apply relative flex min-h-[100dvh] w-full flex-col bg-[#f8fafc];
+    @apply lg:my-6 lg:max-w-[1080px] lg:rounded-[2.5rem] lg:border-[10px] lg:border-white lg:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.5)];
+  }
+
+  .dashboard-legacy-container {
+    @apply relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#f8fafc];
+    @apply sm:h-[850px] sm:max-w-[480px] sm:rounded-[3rem] sm:border-[12px] sm:border-white sm:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.5)];
   }
 
   .premium-card {

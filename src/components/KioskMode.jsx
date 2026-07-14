@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  User,
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
   ChevronRight,
   Delete,
-  CheckCircle2,
-  Camera,
   Loader2,
+  MapPin,
   PlayCircle,
+  RefreshCcw,
+  ShieldCheck,
   StopCircle,
-  ArrowLeft,
+  User,
 } from 'lucide-react';
 import {
   clearConfirmedQueueItems,
@@ -17,30 +20,120 @@ import {
 } from '../queue';
 import { getCachedKioskState, setCachedKioskState } from '../lib/kioskCache';
 import { getDeviceId } from '../lib/device';
+import { DNI_MAX_LENGTH, isValidDni, sanitizeDni } from '../lib/dni';
 import { getKioskState } from '../services/supabaseApi';
+import FlowStepIndicator from './FlowStepIndicator';
 
 const FALLBACK_POSITION = { coords: { latitude: 0, longitude: 0 } };
+const RESET_DELAY_MS = 3500;
 
 const ACTIONS = {
   START: {
-    label: 'Inicio de\nJornada',
+    label: 'Iniciar jornada',
+    shortLabel: 'Inicio de jornada',
     value: 'START',
-    icon: <PlayCircle size={44} strokeWidth={1} />,
-    color: 'border-emerald-500/20 bg-emerald-50/30 text-emerald-900',
+    icon: <PlayCircle size={24} strokeWidth={1.9} />,
+    accent: 'emerald',
+    description: 'Registra el inicio de la jornada laboral.',
   },
   END: {
-    label: 'Fin de\nJornada',
+    label: 'Finalizar jornada',
+    shortLabel: 'Fin de jornada',
     value: 'END',
-    icon: <StopCircle size={44} strokeWidth={1} />,
-    color: 'border-rose-500/20 bg-rose-50/30 text-rose-900',
+    icon: <StopCircle size={24} strokeWidth={1.9} />,
+    accent: 'emerald',
+    description: 'Cierra la jornada y calcula las horas finales.',
   },
 };
 
 function getActionConfig(allowedAction) {
-  return allowedAction && ACTIONS[allowedAction] ? [ACTIONS[allowedAction]] : [];
+  return allowedAction && ACTIONS[allowedAction] ? ACTIONS[allowedAction] : null;
 }
 
-export default function KioskMode({ locationId, onLogout }) {
+function getActionTone(accent) {
+  if (accent === 'emerald') {
+    return {
+      card: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+      icon: 'bg-emerald-100 text-emerald-700',
+      button: 'bg-emerald-600 text-white hover:bg-emerald-700',
+    };
+  }
+
+  return {
+    card: 'border-rose-200 bg-rose-50 text-rose-900',
+    icon: 'bg-rose-100 text-rose-700',
+    button: 'bg-rose-600 text-white hover:bg-rose-700',
+  };
+}
+
+function formatDisplayDate(date = new Date()) {
+  return new Intl.DateTimeFormat('es-AR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+function formatDisplayTime(date = new Date()) {
+  return new Intl.DateTimeFormat('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function getLookupErrorMessage(state, fallbackError) {
+  if (state?.error) return state.error;
+  return fallbackError?.message || 'No se pudo validar el estado';
+}
+
+function getCameraErrorMessage(status) {
+  if (status === 'denied') {
+    return 'Permiso de cámara denegado. Habilitalo para continuar.';
+  }
+  if (status === 'unavailable') {
+    return 'No encontramos una cámara disponible en este dispositivo.';
+  }
+  return 'La cámara no está lista todavía.';
+}
+
+function StatusNotice({
+  tone = 'slate',
+  title,
+  description,
+  actionLabel = null,
+  onAction = null,
+}) {
+  const toneClass = {
+    rose: 'border-rose-200 bg-rose-50 text-rose-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    blue: 'border-blue-200 bg-blue-50 text-blue-700',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    slate: 'border-slate-200 bg-slate-50 text-slate-700',
+  }[tone];
+
+  return (
+    <div className={`rounded-2xl border px-4 py-3 text-sm ${toneClass}`}>
+      <p className="font-semibold">{title}</p>
+      {description && <p className="mt-1 leading-6 opacity-90">{description}</p>}
+      {actionLabel && onAction && (
+        <button
+          type="button"
+          onClick={onAction}
+          className="mt-3 text-sm font-semibold underline underline-offset-4"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function KioskMode({
+  locationId,
+  locationName,
+  onLogout,
+  onBackToLocations,
+}) {
   const [dni, setDni] = useState('');
   const [step, setStep] = useState('dni');
   const [selectedAction, setSelectedAction] = useState(null);
@@ -49,29 +142,97 @@ export default function KioskMode({ locationId, onLogout }) {
   const [stateLookup, setStateLookup] = useState(null);
   const [lookupSource, setLookupSource] = useState('server');
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [cameraStatus, setCameraStatus] = useState('idle');
+  const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const [currentTimeLabel, setCurrentTimeLabel] = useState(formatDisplayTime());
   const videoRef = useRef(null);
+  const resetTimerRef = useRef(null);
+  const lookupInFlightRef = useRef(false);
 
-  const availableActions = useMemo(
+  const availableAction = useMemo(
     () => getActionConfig(stateLookup?.allowed_action),
     [stateLookup]
   );
 
-  async function startCamera() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      });
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch (cameraError) {
-      console.error('Camera error:', cameraError);
-    }
-  }
+  const actionTone = getActionTone(availableAction?.accent);
 
-  function stopCamera() {
+  const resetFlow = useCallback(() => {
+    setDni('');
+    setStep('dni');
+    setSelectedAction(null);
+    setError('');
+    setStateLookup(null);
+    setCapturedPhoto(null);
+    setCameraStatus('idle');
+  }, []);
+
+  const stopCamera = useCallback(() => {
     if (videoRef.current && videoRef.current.srcObject) {
       videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
     }
-  }
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    setCameraStatus('loading');
+    setCapturedPhoto(null);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraStatus('unavailable');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 960 },
+          height: { ideal: 1280 },
+        },
+      });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setCameraStatus('ready');
+    } catch (cameraError) {
+      console.error('Camera error:', cameraError);
+      if (
+        cameraError?.name === 'NotAllowedError' ||
+        cameraError?.name === 'PermissionDeniedError'
+      ) {
+        setCameraStatus('denied');
+      } else {
+        setCameraStatus('unavailable');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTimeLabel(formatDisplayTime());
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (step === 'actions' || step === 'photo') {
+      startCamera();
+      return () => stopCamera();
+    }
+
+    stopCamera();
+    return undefined;
+  }, [startCamera, step, stopCamera]);
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+      }
+    };
+  }, [stopCamera]);
 
   const resolveKioskState = useCallback(async () => {
     setLookupLoading(true);
@@ -88,7 +249,7 @@ export default function KioskMode({ locationId, onLogout }) {
       if (cached) {
         setStateLookup(cached);
         setLookupSource('cache');
-        setError('Sin conexion: mostrando ultimo estado conocido');
+        setError('Sin conexión: mostramos el último estado conocido.');
         return cached;
       }
       throw lookupError;
@@ -97,65 +258,84 @@ export default function KioskMode({ locationId, onLogout }) {
     }
   }, [dni, locationId]);
 
-  const handleValidate = useCallback(async () => {
-    if (dni.length < 7) {
-      setError('DNI demasiado corto');
-      setTimeout(() => setError(''), 3000);
+  const handleValidate = useCallback(async (event) => {
+    event?.preventDefault();
+
+    if (!isValidDni(dni)) {
+      setError('Ingresá un DNI válido de 7 u 8 dígitos.');
       return;
     }
+
+    if (lookupInFlightRef.current) return;
+    lookupInFlightRef.current = true;
 
     try {
       const state = await resolveKioskState();
       if (!state?.success) {
-        setError(state?.error || 'No se pudo validar el DNI');
+        setError(getLookupErrorMessage(state));
         return;
       }
 
       if (state.allowed_action === 'NONE') {
-        setError('La jornada de hoy ya fue completada');
+        setError('La jornada de hoy ya fue completada.');
         return;
       }
 
+      setSelectedAction(getActionConfig(state.allowed_action));
       setStep('actions');
+      setError('');
     } catch (lookupError) {
       console.error('Error resolviendo estado del kiosco:', lookupError);
-      setError(lookupError.message || 'No se pudo validar el estado');
+      setError(getLookupErrorMessage(null, lookupError));
+    } finally {
+      lookupInFlightRef.current = false;
     }
   }, [dni, resolveKioskState]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (step !== 'dni') return;
+
       if (event.key >= '0' && event.key <= '9') {
-        if (dni.length < 8) setDni((prev) => prev + event.key);
+        setDni((prev) => sanitizeDni(`${prev}${event.key}`));
+        setError('');
       } else if (event.key === 'Backspace') {
+        event.preventDefault();
         setDni((prev) => prev.slice(0, -1));
-      } else if (event.key === 'Enter' && dni.length >= 7) {
+      } else if (event.key === 'Enter' && isValidDni(dni)) {
+        event.preventDefault();
         handleValidate();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dni, step, handleValidate]);
+  }, [dni, handleValidate, step]);
 
-  useEffect(() => {
-    if (step === 'photo' || step === 'dni') {
-      startCamera();
-      return stopCamera;
+  const capturePhoto = () => {
+    if (!videoRef.current || !videoRef.current.videoWidth || !videoRef.current.videoHeight) {
+      setError('La cámara todavía no está lista para capturar la foto.');
+      return;
     }
-    stopCamera();
-  }, [step]);
 
-  const takePhoto = () => {
-    if (!videoRef.current) return null;
-    if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) return null;
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-    return dataUrl === 'data:,' ? null : dataUrl;
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    if (dataUrl === 'data:,') {
+      setError('No se pudo capturar la foto. Probá nuevamente.');
+      return;
+    }
+
+    setCapturedPhoto(dataUrl);
+    setCameraStatus('captured');
+    setError('');
+  };
+
+  const retakePhoto = () => {
+    setCapturedPhoto(null);
+    startCamera();
   };
 
   const getPositionFast = () =>
@@ -177,7 +357,11 @@ export default function KioskMode({ locationId, onLogout }) {
     });
 
   const confirmAndSend = async () => {
-    const photoDataUrl = takePhoto();
+    if (!capturedPhoto) {
+      setError('Antes de confirmar, capturá una foto.');
+      return;
+    }
+
     setStep('loading');
     setError('');
 
@@ -189,15 +373,16 @@ export default function KioskMode({ locationId, onLogout }) {
         employeeId: stateLookup?.employee_id,
         businessDate: stateLookup?.business_date,
         requestedEvent: selectedAction.value,
-        photoDataUrl,
+        photoDataUrl: capturedPhoto,
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         deviceId: getDeviceId(),
         syncSource: 'kiosk-web',
       });
 
-      /** @type {{ result: any, photoWarning: string | null } | null} */
+      /** @type {{ result: { state: Record<string, any> }, photoWarning: string | null } | null} */
       let confirmationResult = null;
+      /** @type {Error | null} */
       let syncError = null;
 
       await syncQueuedEntries({
@@ -215,80 +400,100 @@ export default function KioskMode({ locationId, onLogout }) {
 
       clearConfirmedQueueItems();
 
-      if (confirmationResult && confirmationResult.result) {
+      if (confirmationResult?.result) {
         setStateLookup(confirmationResult.result.state);
         setCachedKioskState(dni, confirmationResult.result.state);
         setLookupSource('server');
         setLastEntry({
-          nombre: confirmationResult.result.state.employee_name || `DNI ${dni}`,
-          tipo: selectedAction.label,
-          hora: confirmationResult.result.state.last_event_at_label || new Date().toLocaleTimeString(),
-          estado: confirmationResult.photoWarning ? 'Confirmada con advertencia de foto' : 'Confirmada',
+          name: confirmationResult.result.state.employee_name || `DNI ${dni}`,
+          action: selectedAction.shortLabel,
+          hour:
+            confirmationResult.result.state.last_event_at_label ||
+            formatDisplayTime(),
+          status: confirmationResult.photoWarning
+            ? 'Registrado con advertencia de foto'
+            : 'Registrado correctamente',
         });
       } else {
         setLastEntry({
-          nombre: stateLookup?.employee_name || `DNI ${dni}`,
-          tipo: selectedAction.label,
-          hora: new Date().toLocaleTimeString(),
-          estado: syncError ? 'Pendiente de sincronizacion' : 'Guardada para sincronizar',
+          name: stateLookup?.employee_name || `DNI ${dni}`,
+          action: selectedAction.shortLabel,
+          hour: formatDisplayTime(),
+          status: syncError ? 'Pendiente de sincronización' : 'Guardado para sincronizar',
         });
       }
 
       setStep('success');
-      setDni('');
-      setSelectedAction(null);
-      setTimeout(() => {
-        setStateLookup(null);
-        setStep('dni');
-      }, 4000);
+      resetTimerRef.current = setTimeout(() => {
+        resetFlow();
+      }, RESET_DELAY_MS);
     } catch (submitError) {
       console.error('Error registrando fichada:', submitError);
-      setError(submitError.message || 'No se pudo guardar la fichada');
+      setError(submitError.message || 'No se pudo registrar la fichada.');
       setStep('photo');
     }
   };
 
+  const employeeName = stateLookup?.employee_name || 'Empleado identificado';
+  const currentBusinessDate = stateLookup?.business_date
+    ? formatDisplayDate(new Date(`${stateLookup.business_date}T12:00:00`))
+    : formatDisplayDate();
+
   if (step === 'loading' || lookupLoading) {
     return (
-      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-8 bg-slate-900/90 backdrop-blur-md fade-up">
-        <div className="relative mb-12">
-          <div className="absolute inset-[-40px] bg-blue-500/20 rounded-full animate-pulse scale-150" />
-          <div className="absolute inset-[-20px] bg-blue-600/10 rounded-full animate-ping scale-125" />
-          <div className="relative w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl">
-            <Loader2 className="animate-spin text-blue-600" size={40} strokeWidth={2.5} />
-          </div>
+      <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center fade-up">
+        <FlowStepIndicator currentStep={2} />
+        <div className="flex h-20 w-20 items-center justify-center rounded-[2rem] bg-white shadow-lg shadow-slate-200/70">
+          <Loader2 className="h-9 w-9 animate-spin text-blue-600" />
         </div>
-        <h3 className="text-3xl font-black text-white tracking-widest uppercase italic">
-          {lookupLoading ? 'VALIDANDO' : 'REGISTRANDO'}
-        </h3>
-        <p className="text-blue-400 font-bold text-[10px] uppercase tracking-[0.4em] mt-4 opacity-70">
-          {lookupLoading ? 'Consultando estado real en Supabase' : 'Sincronizando fichada'}
-        </p>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">
+            {lookupLoading ? 'Validando DNI' : 'Registrando fichada'}
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            {lookupLoading
+              ? 'Estamos verificando el estado actual del empleado.'
+              : 'Guardando foto, ubicación y evento en el sistema.'}
+          </p>
+        </div>
       </div>
     );
   }
 
   if (step === 'success') {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white fade-up text-center">
-        <div className="w-24 h-24 bg-emerald-500 rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/30 animate-bounce">
-          <CheckCircle2 size={48} className="text-white" />
-        </div>
-        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight uppercase leading-none mb-6">
-          REGISTRADO
-        </h2>
-        <div className="w-full bg-slate-50 p-6 rounded-3xl border border-slate-100 flex flex-col space-y-3">
-          <div className="flex justify-between items-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            <span>Accion</span>
-            <span className="text-slate-900">{lastEntry?.tipo.replace('\n', ' ')}</span>
-          </div>
-          <div className="flex justify-between items-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            <span>Hora</span>
-            <span className="text-slate-900">{lastEntry?.hora}</span>
-          </div>
-          <div className="flex justify-between items-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            <span>Estado</span>
-            <span className="text-amber-600">{lastEntry?.estado}</span>
+      <div className="flex flex-1 flex-col bg-white px-5 pb-6 pt-4 fade-up sm:px-6">
+        <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5">
+          <FlowStepIndicator currentStep={3} />
+
+          <div className="flex flex-1 flex-col items-center justify-center rounded-[2rem] border border-emerald-200 bg-emerald-50 px-6 py-8 text-center shadow-sm">
+            <div className="flex h-20 w-20 items-center justify-center rounded-[2rem] bg-emerald-600 text-white shadow-lg shadow-emerald-200">
+              <CheckCircle2 size={40} strokeWidth={2.2} />
+            </div>
+            <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
+              Confirmación
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
+              {selectedAction?.shortLabel === 'Fin de jornada'
+                ? 'Jornada finalizada correctamente'
+                : 'Jornada iniciada correctamente'}
+            </h2>
+            <p className="mt-3 text-base text-slate-600">
+              {lastEntry?.hour} · {locationName}
+            </p>
+
+            <div className="mt-6 w-full rounded-[1.5rem] border border-white/80 bg-white/80 p-4 text-left">
+              <p className="text-sm font-semibold text-slate-900">{lastEntry?.name}</p>
+              <p className="mt-1 text-sm text-slate-500">{lastEntry?.status}</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={resetFlow}
+              className="mt-6 rounded-[1.2rem] border border-emerald-200 bg-white px-5 py-3 text-sm font-semibold text-emerald-700"
+            >
+              Volver al inicio
+            </button>
           </div>
         </div>
       </div>
@@ -296,188 +501,437 @@ export default function KioskMode({ locationId, onLogout }) {
   }
 
   if (step === 'actions') {
+    const showCameraError = cameraStatus === 'denied' || cameraStatus === 'unavailable';
+
     return (
-      <div className="flex-1 flex flex-col p-8 fade-up bg-white">
-        <header className="mb-10 text-center">
-          <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">
-            REGISTRO
-          </h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-3">
-            {stateLookup?.status_label || 'Selecciona la accion valida'}
-          </p>
-          {lookupSource === 'cache' && (
-            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-[0.2em] mt-3">
-              Usando estado cacheado por falta de conexion
-            </p>
-          )}
-        </header>
+      <div className="flex flex-1 flex-col bg-white px-5 pb-6 pt-4 fade-up sm:px-6">
+        <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5">
+          <FlowStepIndicator currentStep={1} />
 
-        <div className="flex-1 grid grid-cols-2 gap-5 place-content-center">
-          {availableActions.map((action) => (
-            <button
-              key={action.value}
-              onClick={() => {
-                setSelectedAction(action);
-                setStep('photo');
-              }}
-              className={`aspect-square group p-8 rounded-[3rem] border-2 ${action.color} flex flex-col items-center justify-center text-center space-y-5 active:scale-95 transition-all duration-300 shadow-xl shadow-slate-100 flex-shrink-0`}
-            >
-              <div className="transition-transform group-hover:scale-110 duration-500">
-                {action.icon}
+          <section className="rounded-[2rem] border border-slate-200 bg-slate-50/80 p-5 shadow-sm">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-600">
+                    Estado actual
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                    {employeeName}
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {locationName} · {currentBusinessDate} · {currentTimeLabel}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    Estado
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                    {stateLookup?.status_label || 'Sin datos'}
+                  </p>
+                </div>
               </div>
-              <span className="text-[11px] font-extrabold uppercase tracking-widest leading-tight whitespace-pre-line">
-                {action.label}
-              </span>
-            </button>
-          ))}
-        </div>
 
-        <div className="mt-8 flex justify-center">
-          <button
-            onClick={() => setStep('dni')}
-            className="flex items-center space-x-3 px-8 py-3 bg-slate-50 text-slate-400 rounded-full border border-slate-100/50 hover:text-blue-600 transition-colors"
-          >
-            <ArrowLeft size={16} />
-            <span className="text-[9px] font-black uppercase tracking-widest leading-none">
-              Volver atras
-            </span>
-          </button>
+              {lookupSource === 'cache' && (
+                <StatusNotice
+                  tone="amber"
+                  title="Usando estado guardado localmente"
+                  description="No hubo conexión en tiempo real, así que mostramos la última información conocida para no cortar el flujo."
+                />
+              )}
+            </div>
+          </section>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <section className={`rounded-[2rem] border p-5 shadow-sm ${actionTone.card}`}>
+              <div className="flex items-start gap-4">
+                <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${actionTone.icon}`}>
+                  {availableAction?.icon}
+                </div>
+                <div className="flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] opacity-70">
+                    Acción disponible
+                  </p>
+                  <h3 className="mt-2 text-2xl font-bold tracking-tight">
+                    {availableAction?.label}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 opacity-80">
+                    {availableAction?.description}
+                  </p>
+                  <div className="mt-4 rounded-[1.3rem] border border-white/70 bg-white/70 px-4 py-3 text-sm text-slate-700">
+                    Último estado: {stateLookup?.status_label || 'Sin registros para hoy'}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
+                  Validación con foto
+                </p>
+                <p className="mt-1 text-sm text-slate-500">Mirá a cámara y tomá la foto para confirmar.</p>
+              </div>
+
+              <div className="relative mx-auto max-w-xs overflow-hidden rounded-[1.5rem] bg-slate-900">
+                {capturedPhoto ? (
+                  <img src={capturedPhoto} alt="Foto capturada" className="aspect-[4/3] w-full object-cover" />
+                ) : (
+                  <video ref={videoRef} autoPlay playsInline muted className="aspect-[4/3] w-full object-cover" />
+                )}
+                <div className="pointer-events-none absolute inset-[10%] rounded-[1.5rem] border-2 border-white/80" />
+              </div>
+
+              <div className="mt-3 grid gap-3">
+                {showCameraError && (
+                  <StatusNotice
+                    tone="rose"
+                    title={getCameraErrorMessage(cameraStatus)}
+                    actionLabel="Reintentar cámara"
+                    onAction={startCamera}
+                  />
+                )}
+                {error && <StatusNotice tone="rose" title="No pudimos continuar" description={error} />}
+
+                {!capturedPhoto ? (
+                  <button
+                    type="button"
+                    onClick={capturePhoto}
+                    disabled={cameraStatus !== 'ready'}
+                    className="flex w-full items-center justify-center gap-3 rounded-[1.2rem] bg-emerald-600 px-5 py-3.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {cameraStatus === 'loading' ? <Loader2 className="animate-spin" size={19} /> : <Camera size={19} />}
+                    {cameraStatus === 'loading' ? 'Preparando cámara' : 'Tomar foto'}
+                  </button>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={retakePhoto}
+                      className="rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-700"
+                    >
+                      Repetir
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmAndSend}
+                      className="rounded-[1.2rem] bg-emerald-600 px-4 py-3.5 text-sm font-semibold text-white"
+                    >
+                      Confirmar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          <div className="mt-auto grid gap-3">
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setError('');
+                  setStep('dni');
+                }}
+                className="flex-1 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+              >
+                Cambiar DNI
+              </button>
+              <button
+                type="button"
+                onClick={onBackToLocations || onLogout}
+                className="flex-1 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+              >
+                Cambiar sede
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   if (step === 'photo') {
-    return (
-      <div className="flex-1 flex flex-col p-8 fade-up bg-white">
-        <header className="mb-8 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-extrabold text-slate-900 leading-none">
-              VALIDAR FOTO
-            </h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">
-              Paso final de seguridad
-            </p>
-          </div>
-          <button
-            onClick={() => setStep('actions')}
-            className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400"
-          >
-            <ArrowLeft size={20} />
-          </button>
-        </header>
+    const showCameraError = cameraStatus === 'denied' || cameraStatus === 'unavailable';
 
-        <div className="relative flex-1 rounded-[3rem] overflow-hidden bg-slate-900 shadow-2xl mb-8 border-4 border-white">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover grayscale-[10%]"
-          />
-          <div className="absolute inset-0 border-[20px] border-black/10 pointer-events-none" />
-          <div className="absolute top-6 left-6 flex items-center space-x-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
-            <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
-            <span className="text-[8px] font-black text-white uppercase tracking-widest leading-none">
-              REC START
-            </span>
+    return (
+      <div className="flex flex-1 flex-col bg-white px-5 pb-6 pt-4 fade-up sm:px-6">
+        <div className="mx-auto flex h-full w-full max-w-md flex-col gap-5">
+          <FlowStepIndicator currentStep={2} />
+
+          <section className="rounded-[2rem] border border-slate-200 bg-slate-50/80 p-5 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+                <ShieldCheck size={22} strokeWidth={1.9} />
+              </div>
+              <div className="flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-600">
+                  Paso 3
+                </p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                  Validación con cámara
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Mirá a cámara y mantené el rostro dentro del marco. Primero tomamos la foto y después confirmás si querés usarla.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">{employeeName}</p>
+                <p className="mt-1 text-sm text-slate-500">{selectedAction?.shortLabel} · {locationName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCapturedPhoto(null);
+                  setError('');
+                  setStep('actions');
+                }}
+                className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500"
+              >
+                <ArrowLeft size={18} />
+              </button>
+            </div>
+
+            <div className="relative overflow-hidden rounded-[1.75rem] bg-slate-900">
+              {capturedPhoto ? (
+                <img src={capturedPhoto} alt="Foto capturada" className="aspect-[4/5] w-full object-cover" />
+              ) : (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="aspect-[4/5] w-full object-cover"
+                />
+              )}
+
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute inset-x-[14%] top-[12%] bottom-[12%] rounded-[2rem] border-2 border-white/80" />
+                <div className="absolute left-4 top-4 rounded-full bg-black/45 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white backdrop-blur-sm">
+                  {capturedPhoto
+                    ? 'Foto capturada'
+                    : cameraStatus === 'loading'
+                      ? 'Cámara cargando'
+                      : 'Vista previa'}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {showCameraError ? (
+                <StatusNotice
+                  tone="rose"
+                  title={getCameraErrorMessage(cameraStatus)}
+                  description="Podés reintentar cuando la cámara esté disponible o volver al paso anterior."
+                  actionLabel="Reintentar cámara"
+                  onAction={startCamera}
+                />
+              ) : cameraStatus === 'loading' ? (
+                <StatusNotice
+                  tone="blue"
+                  title="Preparando la cámara"
+                  description="Esperá un segundo mientras iniciamos la vista previa."
+                />
+              ) : capturedPhoto ? (
+                <StatusNotice
+                  tone="emerald"
+                  title="Foto lista para validar"
+                  description="Si quedó bien, confirmá. Si no, repetila antes de registrar la fichada."
+                />
+              ) : (
+                <StatusNotice
+                  tone="slate"
+                  title="Instrucciones rápidas"
+                  description="Mirá a cámara y mantené el rostro dentro del marco para capturar una imagen nítida."
+                />
+              )}
+
+              {error && (
+                <StatusNotice
+                  tone="rose"
+                  title="No pudimos continuar"
+                  description={error}
+                />
+              )}
+            </div>
+          </section>
+
+          <div className="mt-auto grid gap-3">
+            {!capturedPhoto ? (
+              <button
+                type="button"
+                onClick={capturePhoto}
+                disabled={cameraStatus !== 'ready'}
+                className="flex w-full items-center justify-center gap-3 rounded-[1.3rem] bg-slate-900 px-5 py-4 text-base font-semibold text-white transition-all disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Camera size={20} />
+                Tomar foto
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={confirmAndSend}
+                  className="flex w-full items-center justify-center gap-3 rounded-[1.3rem] bg-slate-900 px-5 py-4 text-base font-semibold text-white transition-all"
+                >
+                  <ShieldCheck size={20} />
+                  Usar esta foto
+                </button>
+                <button
+                  type="button"
+                  onClick={retakePhoto}
+                  className="flex w-full items-center justify-center gap-3 rounded-[1.3rem] border border-slate-200 bg-white px-5 py-4 text-base font-semibold text-slate-700"
+                >
+                  <RefreshCcw size={18} />
+                  Repetir
+                </button>
+              </>
+            )}
           </div>
         </div>
-
-        <button
-          onClick={confirmAndSend}
-          className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-bold uppercase tracking-widest text-sm flex items-center justify-center space-x-4 shadow-xl shadow-blue-200 active:scale-95 transition-all"
-        >
-          <Camera size={20} />
-          <span>Confirmar identidad</span>
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col flex-1 pb-6 px-6 fade-up">
-      <div className="text-center mt-6 mb-10">
-        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight uppercase leading-none mb-2 italic">
-          IDENTIFICACION
-        </h2>
-        <p className="text-slate-400 font-medium text-[11px] uppercase tracking-wider">
-          Ingresa tu DNI para comenzar
-        </p>
-      </div>
-
-      <div className="mb-10 bg-slate-50 p-4 rounded-[2.5rem] border border-slate-100 flex items-center shadow-inner shrink-0">
-        <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center text-white flex-shrink-0">
-          <User size={24} />
+    <div className="flex flex-1 flex-col bg-white px-3 pb-4 pt-3 fade-up sm:px-6 sm:pb-8 sm:pt-4 lg:px-10 lg:pb-10 lg:pt-8">
+      <form onSubmit={handleValidate} className="mx-auto grid w-full max-w-[1050px] flex-1 gap-3 sm:gap-5 lg:grid-cols-2 lg:items-start lg:gap-6">
+        <div className="lg:col-span-2">
+          <FlowStepIndicator currentStep={1} />
         </div>
-        <div className="flex-1 px-5">
-          <p
-            className={`text-3xl font-bold tracking-[0.05em] leading-none ${!dni ? 'text-slate-200' : 'text-slate-900'}`}
-          >
-            {dni || '00.000.000'}
-          </p>
-        </div>
-        {dni.length > 0 && (
-          <button
-            onClick={() => setDni('')}
-            className="w-10 h-10 flex items-center justify-center text-slate-300"
-          >
-            <Delete size={20} />
-          </button>
-        )}
-      </div>
 
-      <div className="flex-1 grid grid-cols-3 gap-3 mb-6">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'BORRAR', 0, 'SIGUIENTE'].map((key) => (
-          <button
-            key={key}
-            onClick={() => {
-              if (key === 'BORRAR') setDni((prev) => prev.slice(0, -1));
-              else if (key === 'SIGUIENTE') handleValidate();
-              else if (dni.length < 8) setDni((prev) => prev + key);
-            }}
-            className={`rounded-[2rem] text-2xl font-bold transition-all flex items-center justify-center active:scale-90 border ${
-              key === 'SIGUIENTE'
-                ? 'bg-blue-600 text-white border-blue-500 shadow-xl shadow-blue-100 flex-col py-4'
-                : key === 'BORRAR'
-                  ? 'bg-slate-50 text-slate-500 border-transparent text-[10px] font-black uppercase'
-                  : 'bg-white text-slate-900 border-slate-100 shadow-sm'
-            }`}
-          >
-            {key === 'SIGUIENTE' ? (
-              <>
-                <ChevronRight size={24} />
-                <span className="text-[7px] font-black uppercase tracking-tighter mt-1">
-                  Siguiente
+        <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-3 shadow-sm sm:rounded-[2rem] sm:p-5">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-lg shadow-slate-900/15 sm:h-14 sm:w-14 sm:rounded-2xl">
+              <User className="h-5 w-5 sm:h-[26px] sm:w-[26px]" strokeWidth={1.8} />
+            </div>
+            <div className="flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-600">
+                Paso 2
+              </p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">
+                Ingresá el DNI
+              </h2>
+              <p className="mt-2 hidden text-sm leading-6 text-slate-500 sm:block">
+                La fichada completa se hace en segundos. Confirmá el DNI y seguí con la foto de validación.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 sm:mt-4 sm:text-sm">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 border border-slate-200">
+                  <MapPin size={14} />
+                  {locationName}
                 </span>
-              </>
-            ) : key === 'BORRAR' ? (
-              <Delete size={20} />
-            ) : (
-              key
+                <span className="hidden items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 sm:inline-flex">
+                  {currentBusinessDate}
+                </span>
+                <span className="hidden items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 sm:inline-flex">
+                  {currentTimeLabel}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:rounded-[2rem] sm:p-5">
+          <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-3 py-2.5 sm:rounded-[1.75rem] sm:px-4 sm:py-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white sm:h-12 sm:w-12 sm:rounded-2xl">
+                <User size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  DNI
+                </p>
+                <p className={`mt-1 text-3xl font-semibold tracking-[0.06em] sm:mt-2 sm:text-4xl ${dni ? 'text-slate-900' : 'text-slate-300'}`}>
+                  {dni || '00.000.000'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDni('')}
+                disabled={!dni}
+                className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-400 disabled:opacity-40 sm:p-3"
+              >
+                <Delete size={18} />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-4 sm:gap-3">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'BORRAR', 0].map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  if (key === 'BORRAR') {
+                    setDni((prev) => prev.slice(0, -1));
+                  } else {
+                    setDni((prev) => sanitizeDni(`${prev}${key}`));
+                    setError('');
+                  }
+                }}
+                className={`flex h-12 items-center justify-center rounded-[1rem] border text-lg font-semibold transition-all active:scale-95 sm:h-16 sm:rounded-[1.35rem] sm:text-xl ${
+                  key === 'BORRAR'
+                    ? 'border-slate-200 bg-slate-50 text-slate-500'
+                    : 'border-slate-200 bg-white text-slate-900 shadow-sm'
+                }`}
+              >
+                {key === 'BORRAR' ? <Delete size={20} /> : key}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-2 grid gap-2 sm:mt-4 sm:gap-3">
+            {error && (
+              <StatusNotice
+                tone="rose"
+                title="No pudimos avanzar"
+                description={error}
+              />
             )}
+
+            {!error && dni.length > 0 && dni.length < 7 && (
+              <StatusNotice
+                tone="amber"
+                title="DNI incompleto"
+                description="Todavía faltan números para poder validar el empleado."
+              />
+            )}
+          </div>
+        </section>
+
+        <div className="grid gap-2 sm:gap-3 lg:col-span-2">
+          <button
+            type="submit"
+            disabled={!isValidDni(dni) || lookupLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-[1.1rem] bg-slate-900 px-5 py-3.5 text-base font-semibold text-white transition-all disabled:cursor-not-allowed disabled:opacity-40 sm:rounded-[1.3rem] sm:py-4"
+          >
+            Continuar
+            <ChevronRight size={18} />
           </button>
-        ))}
-      </div>
 
-      <div className="h-0 overflow-hidden">
-        <video ref={videoRef} autoPlay playsInline muted />
-      </div>
-
-      {error && (
-        <div className="mt-4 p-4 bg-rose-50 text-rose-600 rounded-2xl text-center text-[10px] font-black uppercase tracking-widest border border-rose-100 animate-bounce">
-          {error}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onBackToLocations || onLogout}
+              className="flex-1 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+            >
+              Cambiar sede
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="flex-1 rounded-[1.2rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+            >
+              Cerrar sesión
+            </button>
+          </div>
         </div>
-      )}
-
-      <div className="mt-auto py-4 text-center">
-        <button
-          onClick={onLogout}
-          className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] hover:text-blue-600 transition-all uppercase"
-        >
-          --- CAMBIAR PUNTO ---
-        </button>
-      </div>
+      </form>
     </div>
   );
 }

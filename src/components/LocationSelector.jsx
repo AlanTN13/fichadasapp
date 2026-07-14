@@ -1,8 +1,25 @@
-import { useState, useEffect } from 'react';
-import { MapPin, ArrowRight, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, CheckCircle2, Loader2, MapPin, Warehouse } from 'lucide-react';
 import { getLocationsForEmail } from '../services/supabaseApi';
+import FlowStepIndicator from './FlowStepIndicator';
 
-export default function LocationSelector({ onSelectLocation, email, initialLocations = [], loading = false, onRetry }) {
+function getLocationLabel(location) {
+  return location?.nombre || location?.name || location || 'Sede';
+}
+
+function getLocationDescription(name) {
+  if (/garage/i.test(name)) return 'Punto secundario de fichaje';
+  if (/planta/i.test(name)) return 'Acceso principal del lavadero';
+  return 'Punto disponible para registrar fichadas';
+}
+
+export default function LocationSelector({
+  onSelectLocation,
+  email,
+  initialLocations = [],
+  loading = false,
+  onRetry,
+}) {
   const [locations, setLocations] = useState(initialLocations);
   const [selectedLocation, setSelectedLocation] = useState('');
   const [error, setError] = useState(null);
@@ -25,91 +42,148 @@ export default function LocationSelector({ onSelectLocation, email, initialLocat
           setError(null);
         }
       } catch {
-        if (isMounted) setError("Error al cargar las ubicaciones.");
+        if (isMounted) setError('No se pudieron cargar las sedes.');
       }
     };
+
     fetchLocations();
-    return () => { isMounted = false };
+    return () => {
+      isMounted = false;
+    };
   }, [email, initialLocations]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const normalizedLocations = useMemo(
+    () =>
+      locations.map((location, index) => ({
+        id: location?.id || location?.nombre || location || `loc-${index}`,
+        label: getLocationLabel(location),
+      })),
+    [locations]
+  );
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
     if (selectedLocation) onSelectLocation(selectedLocation);
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center flex-1 space-y-4">
-        <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
-        <p className="text-xs font-black uppercase tracking-[0.3em] text-gray-400">Cargando Sedes</p>
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        <div>
+          <p className="text-sm font-semibold text-slate-700">Cargando sedes</p>
+          <p className="mt-1 text-sm text-slate-400">Preparando el punto de fichaje.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col flex-1 justify-center items-center w-full max-w-sm mx-auto px-6 pt-12 pb-32 fade-up min-h-max">
-      <div className="mb-10 relative">
-        <div className="absolute inset-0 bg-blue-600/10 blur-[60px] rounded-full scale-150 animate-pulse" />
-        <div className="relative w-24 h-24 rounded-3xl bg-slate-900 flex items-center justify-center text-white shadow-2xl shadow-slate-900/30">
-          <MapPin size={40} strokeWidth={1.5} />
-        </div>
+    <div className="flex flex-1 flex-col bg-white px-5 pb-6 pt-4 fade-up sm:px-6">
+      <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5">
+        <FlowStepIndicator currentStep={0} />
+
+        <section className="rounded-[2rem] border border-slate-200 bg-slate-50/80 p-5 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-900/15">
+              <MapPin size={26} strokeWidth={1.8} />
+            </div>
+            <div className="flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-600">
+                Paso 1
+              </p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+                Elegí la sede
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Seleccioná el punto desde donde se va a realizar la fichada. El flujo sigue recién cuando haya una sede marcada.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4">
+          {error && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <p className="font-medium">{error}</p>
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="mt-2 text-sm font-semibold text-blue-700"
+                >
+                  Reintentar
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="grid gap-3 md:grid-cols-2">
+            {normalizedLocations.map((location) => {
+              const isSelected = selectedLocation === location.id;
+              return (
+                <button
+                  key={location.id}
+                  type="button"
+                  onClick={() => setSelectedLocation(location.id)}
+                  className={`group flex items-center gap-4 rounded-[1.75rem] border px-4 py-4 text-left transition-all duration-200 ${
+                    isSelected
+                      ? 'border-blue-600 bg-blue-50 shadow-lg shadow-blue-100/60'
+                      : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <div
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                      isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    <Warehouse size={22} strokeWidth={1.8} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-lg font-semibold text-slate-900">{location.label}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {getLocationDescription(location.label)}
+                    </p>
+                  </div>
+
+                  <div className="shrink-0">
+                    {isSelected ? (
+                      <CheckCircle2 className="text-blue-600" size={24} strokeWidth={2.2} />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full border border-slate-300 bg-white" />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-auto rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Selección actual
+                </p>
+                <p className="mt-1 text-base font-semibold text-slate-900">
+                  {selectedLocation
+                    ? normalizedLocations.find((location) => location.id === selectedLocation)?.label
+                    : 'Todavía no seleccionaste una sede'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!selectedLocation || normalizedLocations.length === 0}
+              className="flex w-full items-center justify-center gap-3 rounded-[1.25rem] bg-slate-900 px-5 py-4 text-base font-semibold text-white transition-all disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Continuar
+              <ArrowRight size={18} />
+            </button>
+          </div>
+        </form>
       </div>
-
-      <div className="text-center mb-12">
-        <h2 className="text-4xl font-black text-slate-900 mb-3 tracking-tighter uppercase italic">BIENVENIDO</h2>
-        <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">Selecciona tu punto de fichaje</p>
-      </div>
-      
-      <form onSubmit={handleSubmit} className="w-full space-y-10">
-        {error && (
-          <div className="flex items-center justify-between gap-3 text-rose-600 text-[11px] py-4 px-5 bg-rose-50 rounded-2xl border border-rose-100 font-bold uppercase tracking-wider fade-up">
-            <span>{error}</span>
-            {onRetry && (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="text-blue-600 hover:text-blue-700 transition-colors"
-              >
-                Reintentar
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="relative group">
-          <div className="absolute -top-3 left-6 px-3 bg-white text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] z-10 border-l border-r border-slate-100">
-            Sedes Disponibles
-          </div>
-          <select
-            value={selectedLocation}
-            onChange={(e) => setSelectedLocation(e.target.value)}
-            className="block w-full bg-slate-50 border-2 border-slate-100 text-slate-900 focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 rounded-[2rem] py-6 px-8 text-xl appearance-none shadow-sm font-black transition-all duration-500 cursor-pointer italic"
-            required
-          >
-            <option value="" disabled className="font-sans not-italic text-slate-400">--- Elegir Sede ---</option>
-            {locations.map((loc, idx) => (
-              <option key={loc.id || idx} value={loc.id || loc.nombre || loc} className="font-sans not-italic text-slate-900 py-4">
-                {loc.nombre || loc.name || loc}
-              </option>
-            ))}
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-8 text-blue-600">
-            <svg className="fill-current h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-            </svg>
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={!selectedLocation || locations.length === 0}
-          className="w-full btn-premium bg-slate-900 rounded-[2rem] text-white font-black py-6 px-8 text-lg flex items-center justify-center transition-all shadow-2xl shadow-slate-900/30 active:translate-y-1 uppercase tracking-widest italic"
-        >
-          <span className="flex items-center">
-            INGRESAR <ArrowRight className="ml-3 group-hover:translate-x-2 transition-transform" />
-          </span>
-        </button>
-      </form>
     </div>
   );
 }

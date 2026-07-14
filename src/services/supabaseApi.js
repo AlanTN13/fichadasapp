@@ -33,7 +33,7 @@ export async function getLocationsForEmail(email) {
 export async function getKioskState({ dni, locationId }) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc('get_kiosk_state_by_dni', {
-    p_dni: dni,
+    p_dni: String(dni),
     p_location_id: locationId,
     p_timezone: appEnv.businessTimezone,
   });

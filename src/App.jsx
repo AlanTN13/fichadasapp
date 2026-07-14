@@ -10,6 +10,7 @@ import { clearConfirmedQueueItems, syncQueuedEntries } from './queue';
 function App() {
   const [view, setView] = useState('login'); // 'login', 'location', 'kiosk', 'dashboard'
   const [locationId, setLocationId] = useState(null);
+  const [selectedLocationName, setSelectedLocationName] = useState('');
   const [userEmail, setUserEmail] = useState(null);
   const [locations, setLocations] = useState([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
@@ -49,6 +50,7 @@ function App() {
     setLocations([]);
     setLocationsLoading(false);
     setLocationId(null);
+    setSelectedLocationName('');
     setView('login');
   };
 
@@ -67,8 +69,16 @@ function App() {
   }, [view, userEmail, locations.length, locationsLoading]);
 
   const handleLocationSelect = (locId) => {
+    const selectedLocation = locations.find((location) => location.id === locId);
     setLocationId(locId);
+    setSelectedLocationName(
+      selectedLocation?.name || selectedLocation?.nombre || 'Sede seleccionada'
+    );
     setView('kiosk');
+  };
+
+  const handleBackToLocations = () => {
+    setView('location');
   };
 
   useEffect(() => {
@@ -96,8 +106,10 @@ function App() {
     };
   }, []);
 
+  const isDashboard = view === 'dashboard';
+
   return (
-    <div className="fixed inset-0 bg-[#020617] flex items-center justify-center overflow-hidden font-['Montserrat']">
+    <div className={`${isDashboard ? 'fixed inset-0 items-center overflow-hidden' : 'relative min-h-[100dvh] items-start overflow-x-hidden'} bg-[#020617] flex justify-center font-['Montserrat']`}>
 
       {/* Dynamic Background */}
       <div className="absolute inset-0 pointer-events-none">
@@ -105,7 +117,7 @@ function App() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-indigo-600/30 blur-[160px] rounded-full animate-pulse delay-1000" />
       </div>
 
-      <main className="app-container">
+      <main className={isDashboard ? 'dashboard-legacy-container' : 'app-container'}>
 
         {/* Header Branding */}
         {view !== 'kiosk' && (
@@ -134,7 +146,7 @@ function App() {
           </header>
         )}
 
-        <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
+        <div className={isDashboard ? 'flex-1 flex flex-col relative overflow-hidden bg-white' : 'relative flex flex-1 flex-col bg-white'}>
           {view === 'login' && <Login onLoginSuccess={handleLoginSuccess} />}
           {view === 'location' && (
             <LocationSelector
@@ -145,7 +157,14 @@ function App() {
               onRetry={handleRetryLocations}
             />
           )}
-          {view === 'kiosk' && <KioskMode locationId={locationId} onLogout={handleLogout} />}
+          {view === 'kiosk' && (
+            <KioskMode
+              locationId={locationId}
+              locationName={selectedLocationName}
+              onLogout={handleLogout}
+              onBackToLocations={handleBackToLocations}
+            />
+          )}
           {view === 'dashboard' && <Dashboard userEmail={userEmail} />}
         </div>
 
