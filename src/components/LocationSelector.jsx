@@ -79,30 +79,30 @@ export default function LocationSelector({
   }
 
   return (
-    <div className="flex flex-1 flex-col bg-white px-5 pb-6 pt-4 fade-up sm:px-6">
-      <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5">
+    <div className="flex min-w-0 max-w-full flex-1 flex-col bg-white px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 fade-up sm:px-6 sm:pb-6 sm:pt-4">
+      <div className="mx-auto flex h-full min-w-0 w-full max-w-4xl flex-col gap-3 sm:gap-5">
         <FlowStepIndicator currentStep={0} />
 
-        <section className="rounded-[2rem] border border-slate-200 bg-slate-50/80 p-5 shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-900/15">
+        <section className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-3 shadow-sm sm:rounded-[2rem] sm:p-5">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-lg shadow-slate-900/15 sm:h-14 sm:w-14 sm:rounded-2xl">
               <MapPin size={26} strokeWidth={1.8} />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-600">
                 Paso 1
               </p>
-              <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+              <h2 className="mt-1 break-words text-2xl font-bold tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">
                 Elegí la sede
               </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
+              <p className="mt-2 break-words text-sm leading-5 text-slate-500 sm:leading-6">
                 Seleccioná el punto desde donde se va a realizar la fichada. El flujo sigue recién cuando haya una sede marcada.
               </p>
             </div>
           </div>
         </section>
 
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex min-w-0 max-w-full flex-1 flex-col gap-3 sm:gap-4">
           {error && (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               <p className="font-medium">{error}</p>
@@ -118,7 +118,7 @@ export default function LocationSelector({
             </div>
           )}
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
             {normalizedLocations.map((location) => {
               const isSelected = selectedLocation === location.id;
               return (
@@ -126,7 +126,7 @@ export default function LocationSelector({
                   key={location.id}
                   type="button"
                   onClick={() => setSelectedLocation(location.id)}
-                  className={`group flex items-center gap-4 rounded-[1.75rem] border px-4 py-4 text-left transition-all duration-200 ${
+                  className={`group flex min-w-0 max-w-full items-center gap-3 rounded-[1.5rem] border px-3 py-3 text-left transition-all duration-200 sm:gap-4 sm:rounded-[1.75rem] sm:px-4 sm:py-4 ${
                     isSelected
                       ? 'border-blue-600 bg-blue-50 shadow-lg shadow-blue-100/60'
                       : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50'
@@ -159,13 +159,13 @@ export default function LocationSelector({
             })}
           </div>
 
-          <div className="mt-auto rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mt-auto min-w-0 rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:rounded-[1.75rem] sm:p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                   Selección actual
                 </p>
-                <p className="mt-1 text-base font-semibold text-slate-900">
+                <p className="mt-1 break-words text-sm font-semibold text-slate-900 sm:text-base">
                   {selectedLocation
                     ? normalizedLocations.find((location) => location.id === selectedLocation)?.label
                     : 'Todavía no seleccionaste una sede'}
