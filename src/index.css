@@ -35,7 +35,7 @@
   }
 
   .dashboard-container {
-    @apply w-full min-h-[100dvh] flex flex-col bg-[#f5f7fa] overflow-hidden;
+    @apply h-[100dvh] min-h-0 w-full flex flex-col bg-[#f5f7fa] overflow-hidden;
     @apply sm:h-[100dvh] sm:max-w-none sm:rounded-none sm:border-0 sm:shadow-none;
     @apply lg:mx-auto lg:max-w-[1400px] lg:px-5 lg:py-5;
   }

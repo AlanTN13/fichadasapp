@@ -111,7 +111,7 @@ function App() {
   const showCompactAppHeader = view !== 'kiosk' && !isDashboard;
 
   return (
-    <div className={`${isDashboard ? 'fixed inset-0 items-center overflow-hidden' : 'relative min-h-[100dvh] items-start overflow-x-hidden'} bg-[#020617] flex justify-center font-['Montserrat']`}>
+    <div className={`${isDashboard ? 'fixed inset-0 items-start overflow-clip' : 'relative min-h-[100dvh] items-start overflow-x-hidden'} bg-[#020617] flex justify-center font-['Montserrat']`}>
 
       {/* Dynamic Background */}
       <div className="absolute inset-0 pointer-events-none">
@@ -171,7 +171,7 @@ function App() {
           </header>
         )}
 
-        <div className={`relative flex flex-1 flex-col ${isDashboard ? 'overflow-hidden bg-[#f5f7fa]' : 'bg-white'}`}>
+        <div className={`relative flex flex-1 flex-col ${isDashboard ? 'min-h-0 overflow-hidden bg-[#f5f7fa]' : 'bg-white'}`}>
           {view === 'login' && <Login onLoginSuccess={handleLoginSuccess} />}
           {view === 'location' && (
             <LocationSelector
