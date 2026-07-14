@@ -449,46 +449,52 @@ export default function Dashboard({ userEmail }) {
               </div>
             )}
 
-            <div className="overflow-x-auto md:min-h-0 md:flex-1 md:overflow-auto">
+            <p className="border-b border-slate-100 px-3 py-2 text-xs font-medium text-slate-500 md:hidden">
+              Deslizá para ver más días
+            </p>
+
+            <div className="max-h-[calc(100dvh-12rem)] overflow-auto md:min-h-0 md:max-h-none md:flex-1">
               <table className="min-w-full border-collapse text-sm text-slate-700">
-                <thead>
+                <thead className="sticky top-0 z-20 md:static">
                   <tr className="bg-slate-50">
-                    <th className="sticky left-0 z-20 min-w-[220px] border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-700">
+                    <th className="sticky left-0 z-30 min-w-[176px] border-b border-r border-slate-200 bg-slate-50 px-3 py-2.5 text-left font-semibold text-slate-700 shadow-[7px_0_12px_-10px_rgba(15,23,42,0.7)] md:min-w-[220px] md:px-4 md:py-3 md:shadow-none">
                       Empleado
                     </th>
                     {dateColumns.map((column) => (
                       <th
                         key={column.key}
-                        className={`min-w-[92px] border-b border-r border-slate-200 px-3 py-3 text-center font-semibold ${
+                        className={`min-w-[84px] border-b border-r border-slate-200 px-2 py-2.5 text-center font-semibold md:min-w-[92px] md:px-3 md:py-3 ${
                           column.isWeekend ? 'bg-slate-100 text-slate-700' : 'bg-slate-50'
                         }`}
                       >
                         {column.label}
                       </th>
                     ))}
-                    <th className="min-w-[110px] border-b border-r border-slate-200 px-3 py-3 text-center font-semibold text-slate-700">
+                    <th className="min-w-[100px] border-b border-r border-slate-200 bg-slate-50 px-2 py-2.5 text-center font-semibold text-slate-700 md:min-w-[110px] md:px-3 md:py-3">
                       {periodTotalLabel}
                     </th>
-                    <th className="min-w-[120px] border-b border-slate-200 px-3 py-3 text-center font-semibold text-slate-700">
+                    <th className="min-w-[108px] border-b border-slate-200 bg-slate-50 px-2 py-2.5 text-center font-semibold text-slate-700 md:min-w-[120px] md:px-3 md:py-3">
                       Total quincena
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleTableRows.map((row) => (
+                  {visibleTableRows.map((row, rowIndex) => (
                     <tr key={row.employeeId} className="odd:bg-white even:bg-slate-50/40">
-                      <td className="sticky left-0 z-10 border-b border-r border-slate-200 bg-inherit px-4 py-4 align-middle">
+                      <td className={`sticky left-0 z-10 border-b border-r border-slate-200 px-3 py-3 align-middle shadow-[7px_0_12px_-10px_rgba(15,23,42,0.7)] md:px-4 md:py-4 md:shadow-none ${
+                        rowIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50'
+                      }`}>
                         <div className="font-medium text-slate-900">{row.employeeName}</div>
                         <div className="mt-1 text-xs text-slate-500">{row.dni}</div>
                       </td>
                       {row.dayCells.map((cell) => (
                         <td
                           key={`${row.employeeId}-${cell.key}`}
-                          className={`border-b border-r border-slate-200 px-3 py-4 text-center ${
+                          className={`border-b border-r border-slate-200 px-2 py-3 text-center md:px-3 md:py-4 ${
                             cell.isWeekend ? 'bg-slate-100/70' : ''
                           } text-slate-700`}
                         >
-                          <div className="mx-auto flex min-w-[88px] max-w-[104px] flex-col gap-1 text-left">
+                          <div className="mx-auto flex min-w-[76px] max-w-[88px] flex-col gap-0.5 text-left md:min-w-[88px] md:max-w-[104px] md:gap-1">
                             <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-slate-400">
                               <span>Ing</span>
                               <span className="font-medium text-slate-600">{cell.details.entryLabel}</span>
