@@ -21,6 +21,7 @@ import {
 import { getCachedKioskState, setCachedKioskState } from '../lib/kioskCache';
 import { getDeviceId } from '../lib/device';
 import { DNI_MAX_LENGTH, isValidDni, sanitizeDni } from '../lib/dni';
+import { appEnv } from '../lib/env';
 import { getKioskState } from '../services/supabaseApi';
 import FlowStepIndicator from './FlowStepIndicator';
 
@@ -71,6 +72,7 @@ function formatDisplayDate(date = new Date()) {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: appEnv.businessTimezone,
   }).format(date);
 }
 
@@ -78,6 +80,7 @@ function formatDisplayTime(date = new Date()) {
   return new Intl.DateTimeFormat('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: appEnv.businessTimezone,
   }).format(date);
 }
 
