@@ -106,3 +106,27 @@ export async function getDashboardSummary({ email, locationId, businessDate, sta
   if (error) throw normalizeRpcError(error, 'No se pudo cargar el dashboard');
   return data;
 }
+
+export async function getHoursDashboard({
+  email,
+  locationId,
+  startDate,
+  endDate,
+  fortnightStartDate,
+  fortnightEndDate,
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('get_hours_dashboard_range', {
+    p_email: email,
+    p_location_id: locationId || null,
+    p_period_start: startDate,
+    p_period_end: endDate,
+    p_fortnight_start: fortnightStartDate,
+    p_fortnight_end: fortnightEndDate,
+    p_timezone: appEnv.businessTimezone,
+  });
+
+  if (error) throw normalizeRpcError(error, 'No se pudo cargar las horas');
+  if (!data?.success) throw new Error(data?.error || 'No se pudo cargar las horas');
+  return data;
+}
