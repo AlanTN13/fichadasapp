@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Mail, ArrowRight, Loader2 } from 'lucide-react';
 import { loginWithEmail } from '../services/supabaseApi';
+import LoadingSplash from './LoadingSplash';
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
@@ -27,6 +28,10 @@ export default function Login({ onLoginSuccess }) {
       setLoading(false);
     }
   };
+
+  if (loading) {
+    return <LoadingSplash embedded />;
+  }
 
   return (
     <div className="flex flex-col flex-1 justify-center items-center w-full max-w-sm mx-auto px-6 pt-12 pb-32 fade-up min-h-max">
