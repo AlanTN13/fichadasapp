@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preload" as="image" href="/nahuel-logo.png" fetchpriority="high" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="description" content="Sistema Nahuel para control de fichadas de Lavadero Industrial Nahuel." />
     <meta property="og:type" content="website" />
@@ -17,10 +18,28 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+      #initial-splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#020617;color:#fff;font-family:Montserrat,system-ui,sans-serif;z-index:9999}
+      #initial-splash::before{content:"";position:absolute;width:min(72vw,34rem);height:min(72vw,34rem);border-radius:9999px;background:rgba(37,99,235,.2);filter:blur(100px)}
+      .initial-splash__content{position:relative;display:flex;width:100%;max-width:28rem;flex-direction:column;align-items:center;padding:2.5rem 1.5rem;text-align:center}
+      .initial-splash__logo{display:block;width:clamp(10rem,28vw,16rem);height:clamp(10rem,28vw,16rem);max-width:100%;padding:.5rem;border-radius:2rem;background:#fff;object-fit:contain;filter:drop-shadow(0 24px 60px rgba(37,99,235,.24))}
+      .initial-splash__text{margin:1.75rem 0 0;color:#e2e8f0;font-size:.875rem;font-weight:600;letter-spacing:.025em}
+      .initial-splash__loader{width:1.75rem;height:1.75rem;margin-top:1.25rem;border:2px solid rgba(255,255,255,.2);border-top-color:#3b82f6;border-radius:9999px;animation:initial-splash-spin .8s linear infinite}
+      @keyframes initial-splash-spin{to{transform:rotate(360deg)}}
+      @media (prefers-reduced-motion:reduce){.initial-splash__loader{animation-duration:1.6s}}
+    </style>
     <title>SISTEMA NAHUEL • Control de Fichadas</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="initial-splash" role="status" aria-live="polite" aria-label="Cargando sistema de fichadas">
+        <div class="initial-splash__content">
+          <img class="initial-splash__logo" src="/nahuel-logo.png" alt="Lavadero Industrial Nahuel" decoding="async" fetchpriority="high" />
+          <p class="initial-splash__text">Cargando sistema de fichadas…</p>
+          <span class="initial-splash__loader" aria-hidden="true"></span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

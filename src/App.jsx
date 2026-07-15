@@ -4,16 +4,49 @@ import Login from './components/Login';
 import LocationSelector from './components/LocationSelector';
 import KioskMode from './components/KioskMode';
 import Dashboard from './components/Dashboard';
+import LoadingSplash from './components/LoadingSplash';
 import { getLocationsForEmail } from './services/supabaseApi';
 import { clearConfirmedQueueItems, syncQueuedEntries } from './queue';
 
 function App() {
+  const [initializing, setInitializing] = useState(true);
   const [view, setView] = useState('login'); // 'login', 'location', 'kiosk', 'dashboard'
   const [locationId, setLocationId] = useState(null);
   const [selectedLocationName, setSelectedLocationName] = useState('');
   const [userEmail, setUserEmail] = useState(null);
   const [locations, setLocations] = useState([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let minimumElapsed = false;
+    const logo = new Image();
+    let logoReady = false;
+    const finishLoading = () => {
+      logoReady = true;
+      if (active && minimumElapsed) setInitializing(false);
+    };
+
+    logo.src = '/nahuel-logo.png';
+    if (logo.complete) {
+      finishLoading();
+    } else {
+      logo.addEventListener('load', finishLoading, { once: true });
+      logo.addEventListener('error', finishLoading, { once: true });
+    }
+
+    const minimumTimer = window.setTimeout(() => {
+      minimumElapsed = true;
+      if (active && logoReady) setInitializing(false);
+    }, 650);
+
+    return () => {
+      active = false;
+      window.clearTimeout(minimumTimer);
+      logo.removeEventListener('load', finishLoading);
+      logo.removeEventListener('error', finishLoading);
+    };
+  }, []);
 
   const loadLocations = async (email) => {
     setLocationsLoading(true);
@@ -109,6 +142,10 @@ function App() {
   const isDashboard = view === 'dashboard';
   const showCompactDashboardHeader = isDashboard;
   const showCompactAppHeader = view !== 'kiosk' && !isDashboard;
+
+  if (initializing) {
+    return <LoadingSplash />;
+  }
 
   return (
     <div className={`${isDashboard ? 'fixed inset-0 items-start overflow-clip' : 'relative min-h-[100dvh] items-start overflow-x-hidden'} bg-[#020617] flex justify-center font-['Montserrat']`}>
