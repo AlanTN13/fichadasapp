@@ -11,8 +11,8 @@ export function getSupabaseClient() {
   const { supabaseUrl, supabaseAnonKey } = assertSupabaseEnv();
   client = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      persistSession: false,
-      autoRefreshToken: false,
+      persistSession: true,
+      autoRefreshToken: true,
       detectSessionInUrl: false,
     },
   });

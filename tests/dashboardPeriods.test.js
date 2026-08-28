@@ -65,12 +65,10 @@ describe('dashboard periods', () => {
 
     expect(
       buildHoursDashboardParams({
-        email: 'manager@empresa.com',
         locationId: 'loc-2',
         period,
       })
     ).toEqual({
-      email: 'manager@empresa.com',
       locationId: 'loc-2',
       startDate: '2026-07-06',
       endDate: '2026-07-12',

@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { Mail, ArrowRight, Loader2 } from 'lucide-react';
-import { loginWithEmail } from '../services/supabaseApi';
+import { Mail, ArrowRight, Loader2, LockKeyhole } from 'lucide-react';
+import { getAdminContext, signInWithPassword, signOut } from '../services/supabaseApi';
 import LoadingSplash from './LoadingSplash';
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email) {
-      setError("Por favor, ingrese su email");
+    if (!email || !password) {
+      setError('Ingresá tu email y contraseña');
       return;
     }
     
@@ -19,8 +20,14 @@ export default function Login({ onLoginSuccess }) {
     setError(null);
     
     try {
-      const response = await loginWithEmail(email);
-      onLoginSuccess(response, email);
+      await signInWithPassword(email, password);
+      try {
+        const response = await getAdminContext();
+        onLoginSuccess(response);
+      } catch (contextError) {
+        await signOut().catch(() => {});
+        throw contextError;
+      }
     } catch (err) {
       setError(err.message || "Error de conexión con el servidor.");
       console.error(err);
@@ -53,7 +60,7 @@ export default function Login({ onLoginSuccess }) {
         <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Portal de Administración</p>
       </div>
       
-      <form onSubmit={handleSubmit} className="w-full space-y-6">
+      <form onSubmit={handleSubmit} className="w-full space-y-5">
         <div className="w-full relative group">
           <label htmlFor="email" className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 pl-2">
             E-mail Corporativo
@@ -75,6 +82,28 @@ export default function Login({ onLoginSuccess }) {
           </div>
         </div>
 
+        <div className="w-full relative group">
+          <label htmlFor="password" className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 pl-2">
+            Contraseña
+          </label>
+          <div className="relative overflow-hidden rounded-3xl border-2 border-slate-100 group-focus-within:border-blue-600 group-focus-within:shadow-xl group-focus-within:shadow-blue-600/5 transition-all duration-500 bg-slate-50/50">
+            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-slate-300 group-focus-within:text-blue-600 transition-colors duration-300">
+              <LockKeyhole size={22} />
+            </div>
+            <input
+              type="password"
+              id="password"
+              className="pl-14 block w-full bg-transparent text-slate-900 border-none focus:ring-0 py-6 text-lg font-bold placeholder:text-slate-300 placeholder:font-bold"
+              placeholder="Tu contraseña"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              disabled={loading}
+              autoComplete="current-password"
+              required
+            />
+          </div>
+        </div>
+
         {error && (
           <div className="flex items-center gap-3 text-rose-600 text-[11px] py-4 px-5 bg-rose-50 rounded-2xl border border-rose-100 font-bold uppercase tracking-wider fade-up">
             <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse shrink-0" />
@@ -84,7 +113,7 @@ export default function Login({ onLoginSuccess }) {
 
         <button
           type="submit"
-          disabled={loading || !email}
+          disabled={loading || !email || !password}
           className="w-full mt-4 btn-premium bg-slate-900 rounded-[2rem] text-white font-black py-6 px-8 text-lg flex items-center justify-center transition-all shadow-2xl shadow-slate-900/30 group hover:shadow-slate-900/40 active:translate-y-1 uppercase tracking-widest italic"
         >
           {loading ? (

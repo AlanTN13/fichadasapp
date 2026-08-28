@@ -38,7 +38,7 @@ const DEFAULT_FILTERS = {
   status: 'all',
 };
 
-export default function Dashboard({ userEmail }) {
+export default function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -68,11 +68,10 @@ export default function Dashboard({ userEmail }) {
   const requestParams = useMemo(
     () =>
       buildHoursDashboardParams({
-        email: userEmail,
         locationId: filters.locationId || null,
         period: selectedPeriod,
       }),
-    [filters.locationId, selectedPeriod, userEmail]
+    [filters.locationId, selectedPeriod]
   );
 
   const loadData = useCallback(async () => {

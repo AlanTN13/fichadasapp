@@ -3,41 +3,56 @@ import { LogOut } from 'lucide-react';
 import Login from './components/Login';
 import LocationSelector from './components/LocationSelector';
 import KioskMode from './components/KioskMode';
-import Dashboard from './components/Dashboard';
+import AdminPortal from './components/AdminPortal';
 import LoadingSplash from './components/LoadingSplash';
-import { getLocationsForEmail } from './services/supabaseApi';
+import {
+  getAdminContext,
+  getCurrentSession,
+  onAuthStateChange,
+  signOut,
+} from './services/supabaseApi';
 import { clearConfirmedQueueItems, syncQueuedEntries } from './queue';
 
 function App() {
-  const [initializing, setInitializing] = useState(true);
-  const [view, setView] = useState('login'); // 'login', 'location', 'kiosk', 'dashboard'
+  const [authInitializing, setAuthInitializing] = useState(true);
+  const [splashReady, setSplashReady] = useState(false);
+  const [view, setView] = useState('login');
   const [locationId, setLocationId] = useState(null);
   const [selectedLocationName, setSelectedLocationName] = useState('');
-  const [userEmail, setUserEmail] = useState(null);
-  const [locations, setLocations] = useState([]);
-  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [adminContext, setAdminContext] = useState(null);
+
+  const routeAuthenticatedUser = (context) => {
+    setAdminContext(context);
+    setView(context.role === 'super_admin' ? 'admin' : 'location');
+  };
+
+  const clearSessionState = () => {
+    setAdminContext(null);
+    setLocationId(null);
+    setSelectedLocationName('');
+    setView('login');
+  };
 
   useEffect(() => {
     let active = true;
     let minimumElapsed = false;
-    const logo = new Image();
     let logoReady = false;
+    const logo = new Image();
     const finishLoading = () => {
       logoReady = true;
-      if (active && minimumElapsed) setInitializing(false);
+      if (active && minimumElapsed) setSplashReady(true);
     };
 
     logo.src = '/nahuel-logo.png';
-    if (logo.complete) {
-      finishLoading();
-    } else {
+    if (logo.complete) finishLoading();
+    else {
       logo.addEventListener('load', finishLoading, { once: true });
       logo.addEventListener('error', finishLoading, { once: true });
     }
 
     const minimumTimer = window.setTimeout(() => {
       minimumElapsed = true;
-      if (active && logoReady) setInitializing(false);
+      if (active && logoReady) setSplashReady(true);
     }, 650);
 
     return () => {
@@ -48,175 +63,102 @@ function App() {
     };
   }, []);
 
-  const loadLocations = async (email) => {
-    setLocationsLoading(true);
-
-    try {
-      const data = await getLocationsForEmail(email);
-      setLocations(data);
-      return data;
-    } catch (error) {
-      console.error('Error precargando sedes:', error);
-      setLocations([]);
-      throw error;
-    } finally {
-      setLocationsLoading(false);
-    }
-  };
-
-  const handleLoginSuccess = async (loginContext, email) => {
-    setUserEmail(email);
-    if (loginContext.role === 'super_admin') {
-      setView('dashboard');
-    } else {
-      setView('location');
-      if (Array.isArray(loginContext.locations) && loginContext.locations.length > 0) {
-        setLocations(loginContext.locations);
-      } else {
-        loadLocations(email).catch(() => {});
-      }
-    }
-  };
-
-  const handleLogout = () => {
-    setUserEmail(null);
-    setLocations([]);
-    setLocationsLoading(false);
-    setLocationId(null);
-    setSelectedLocationName('');
-    setView('login');
-  };
-
-  const handleRetryLocations = () => {
-    if (!userEmail) return;
-
-    loadLocations(userEmail).catch(() => {});
-  };
-
   useEffect(() => {
-    if (view !== 'location' || !userEmail || locations.length > 0 || locationsLoading) {
-      return;
-    }
+    let active = true;
 
-    loadLocations(userEmail).catch(() => {});
-  }, [view, userEmail, locations.length, locationsLoading]);
+    getCurrentSession()
+      .then(async (session) => {
+        if (!session) return;
+        const context = await getAdminContext();
+        if (active) routeAuthenticatedUser(context);
+      })
+      .catch(async () => {
+        await signOut().catch(() => {});
+        if (active) clearSessionState();
+      })
+      .finally(() => active && setAuthInitializing(false));
 
-  const handleLocationSelect = (locId) => {
-    const selectedLocation = locations.find((location) => location.id === locId);
-    setLocationId(locId);
-    setSelectedLocationName(
-      selectedLocation?.name || selectedLocation?.nombre || 'Sede seleccionada'
-    );
-    setView('kiosk');
-  };
-
-  const handleBackToLocations = () => {
-    setView('location');
-  };
-
-  useEffect(() => {
-    syncQueuedEntries().then(() => {
-      clearConfirmedQueueItems();
-    }).catch(() => {});
-
-    const interval = setInterval(() => {
-      syncQueuedEntries().then(() => {
-        clearConfirmedQueueItems();
-      }).catch(() => {});
-    }, 5000);
-
-    const handleOnline = () => {
-      syncQueuedEntries().then(() => {
-        clearConfirmedQueueItems();
-      }).catch(() => {});
-    };
-
-    window.addEventListener('online', handleOnline);
+    const { data: authListener } = onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT' && active) clearSessionState();
+    });
 
     return () => {
-      clearInterval(interval);
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    syncQueuedEntries().then(clearConfirmedQueueItems).catch(() => {});
+    const interval = window.setInterval(() => {
+      syncQueuedEntries().then(clearConfirmedQueueItems).catch(() => {});
+    }, 5000);
+    const handleOnline = () => syncQueuedEntries().then(clearConfirmedQueueItems).catch(() => {});
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.clearInterval(interval);
       window.removeEventListener('online', handleOnline);
     };
   }, []);
 
-  const isDashboard = view === 'dashboard';
-  const showCompactDashboardHeader = isDashboard;
-  const showCompactAppHeader = view !== 'kiosk' && !isDashboard;
+  const handleLogout = async () => {
+    await signOut().catch(() => {});
+    clearSessionState();
+  };
 
-  if (initializing) {
+  const handleLocationSelect = (selectedId) => {
+    const selectedLocation = adminContext?.locations?.find((location) => location.id === selectedId);
+    setLocationId(selectedId);
+    setSelectedLocationName(selectedLocation?.name || 'Sede seleccionada');
+    setView('kiosk');
+  };
+
+  if (authInitializing || !splashReady) {
     return <LoadingSplash />;
   }
 
-  return (
-    <div className={`${isDashboard ? 'fixed inset-0 items-start overflow-clip' : 'relative min-h-[100dvh] items-start overflow-x-hidden'} bg-[#020617] flex justify-center font-['Montserrat']`}>
+  if (view === 'admin' && adminContext) {
+    return (
+      <div className="fixed inset-0 flex min-h-0 flex-col font-['Montserrat']">
+        <AdminPortal context={adminContext} onLogout={handleLogout} />
+      </div>
+    );
+  }
 
-      {/* Dynamic Background */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-blue-600/30 blur-[160px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-indigo-600/30 blur-[160px] rounded-full animate-pulse delay-1000" />
+  const showAppHeader = view !== 'kiosk';
+
+  return (
+    <div className="relative flex min-h-[100dvh] items-start justify-center overflow-x-hidden bg-[#020617] font-['Montserrat']">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-[-10%] top-[-10%] h-[60%] w-[60%] rounded-full bg-blue-600/30 blur-[160px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] h-[60%] w-[60%] rounded-full bg-indigo-600/30 blur-[160px]" />
       </div>
 
-      <main className={isDashboard ? 'dashboard-container' : 'app-container'}>
-
-        {showCompactAppHeader && (
-          <header className="px-8 pt-10 pb-6 text-center relative flex-shrink-0 bg-white">
-            <div className="absolute top-10 right-6 z-50">
-              {view !== 'login' && (
-                <button
-                  onClick={handleLogout}
-                  className="w-11 h-11 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-90 border border-rose-100 shadow-sm"
-                  title="Cerrar Sesión"
-                >
-                  <LogOut size={20} strokeWidth={2.5} />
-                </button>
-              )}
+      <main className="app-container">
+        {showAppHeader && (
+          <header className="relative shrink-0 bg-white px-8 pb-6 pt-10 text-center">
+            {view !== 'login' && (
+              <button onClick={handleLogout} className="absolute right-6 top-10 z-50 flex h-11 w-11 items-center justify-center rounded-2xl border border-rose-100 bg-rose-50 text-rose-500" title="Cerrar sesión">
+                <LogOut size={20} strokeWidth={2.5} />
+              </button>
+            )}
+            <div className="mb-4 inline-flex items-center space-x-2 rounded-full bg-blue-600/10 px-3 py-1">
+              <div className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Sistema de fichadas</span>
             </div>
-
-            <div className="inline-flex items-center space-x-2 px-3 py-1 bg-blue-600/10 rounded-full mb-4">
-              <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse" />
-              <span className="text-[10px] font-black text-blue-600 tracking-widest uppercase">ID SMART SYSTEM</span>
-            </div>
-
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-[0.85] uppercase italic italic">
-              LAVADERO<br />
-              <span className="text-blue-600">NAHUEL</span>
+            <h1 className="text-4xl font-black uppercase italic leading-[0.85] tracking-tighter text-slate-900">
+              Lavadero<br /><span className="text-blue-600">Nahuel</span>
             </h1>
           </header>
         )}
 
-        {showCompactDashboardHeader && (
-          <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:px-6 md:py-4">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                Lavadero Nahuel
-              </p>
-              <h1 className="truncate text-lg font-black uppercase italic tracking-tight text-slate-900 md:text-xl">
-                Horas trabajadas
-              </h1>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-              title="Cerrar Sesión"
-            >
-              <span className="hidden sm:inline">Cerrar sesión</span>
-              <span className="sm:hidden">
-                <LogOut size={18} strokeWidth={2.25} />
-              </span>
-            </button>
-          </header>
-        )}
-
-        <div className={`relative flex flex-1 flex-col ${isDashboard ? 'min-h-0 overflow-hidden bg-[#f5f7fa]' : 'bg-white'}`}>
-          {view === 'login' && <Login onLoginSuccess={handleLoginSuccess} />}
-          {view === 'location' && (
+        <div className="relative flex flex-1 flex-col bg-white">
+          {view === 'login' && <Login onLoginSuccess={routeAuthenticatedUser} />}
+          {view === 'location' && adminContext && (
             <LocationSelector
               onSelectLocation={handleLocationSelect}
-              email={userEmail}
-              initialLocations={locations}
-              loading={locationsLoading}
-              onRetry={handleRetryLocations}
+              initialLocations={adminContext.locations || []}
+              loading={false}
             />
           )}
           {view === 'kiosk' && (
@@ -224,19 +166,14 @@ function App() {
               locationId={locationId}
               locationName={selectedLocationName}
               onLogout={handleLogout}
-              onBackToLocations={handleBackToLocations}
+              onBackToLocations={() => setView('location')}
             />
-          )}
-          {view === 'dashboard' && (
-            <Dashboard userEmail={userEmail} onLogout={handleLogout} />
           )}
         </div>
 
-        {showCompactAppHeader && (
-          <footer className="py-6 bg-white shrink-0">
-            <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em] text-center">
-              © 2026 NAHUEL • BUILT BY ID SMART
-            </p>
+        {showAppHeader && (
+          <footer className="shrink-0 bg-white py-6">
+            <p className="text-center text-[9px] font-black uppercase tracking-[0.3em] text-slate-300">© 2026 Nahuel · NexOps</p>
           </footer>
         )}
       </main>

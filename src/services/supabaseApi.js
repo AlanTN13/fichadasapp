@@ -6,28 +6,42 @@ function normalizeRpcError(error, fallbackMessage) {
   return new Error(error?.message || fallbackMessage);
 }
 
-export async function loginWithEmail(email) {
+export async function signInWithPassword(email, password) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc('login_with_email', {
-    p_email: email,
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password,
   });
 
-  if (error) throw normalizeRpcError(error, 'No se pudo iniciar sesión');
-  if (!data?.success) {
-    throw new Error(data?.error || 'Email no autorizado o inactivo.');
-  }
-
+  if (error) throw new Error('Email o contraseña incorrectos.');
   return data;
 }
 
-export async function getLocationsForEmail(email) {
+export async function signOut() {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc('get_locations_for_email', {
-    p_email: email,
-  });
+  const { error } = await supabase.auth.signOut();
+  if (error) throw normalizeRpcError(error, 'No se pudo cerrar la sesión');
+}
 
-  if (error) throw normalizeRpcError(error, 'No se pudieron cargar las sedes');
-  return data?.locations || [];
+export async function getCurrentSession() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw normalizeRpcError(error, 'No se pudo recuperar la sesión');
+  return data.session;
+}
+
+export function onAuthStateChange(callback) {
+  const supabase = getSupabaseClient();
+  return supabase.auth.onAuthStateChange(callback);
+}
+
+export async function getAdminContext() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('get_admin_context');
+
+  if (error) throw normalizeRpcError(error, 'La cuenta no tiene acceso administrativo');
+  if (!data?.success) throw new Error(data?.error || 'Cuenta no autorizada.');
+  return data;
 }
 
 export async function getKioskState({ dni, locationId }) {
@@ -93,22 +107,7 @@ export async function recordTimeEntry(payload) {
   return data;
 }
 
-export async function getDashboardSummary({ email, locationId, businessDate, status }) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc('get_dashboard_summary', {
-    p_email: email,
-    p_location_id: locationId || null,
-    p_business_date: businessDate || null,
-    p_status: status || null,
-    p_timezone: appEnv.businessTimezone,
-  });
-
-  if (error) throw normalizeRpcError(error, 'No se pudo cargar el dashboard');
-  return data;
-}
-
 export async function getHoursDashboard({
-  email,
   locationId,
   startDate,
   endDate,
@@ -117,7 +116,6 @@ export async function getHoursDashboard({
 }) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc('get_hours_dashboard_range', {
-    p_email: email,
     p_location_id: locationId || null,
     p_period_start: startDate,
     p_period_end: endDate,
@@ -128,5 +126,67 @@ export async function getHoursDashboard({
 
   if (error) throw normalizeRpcError(error, 'No se pudo cargar las horas');
   if (!data?.success) throw new Error(data?.error || 'No se pudo cargar las horas');
+  return data;
+}
+
+export async function listEmployees({ includeInactive = true, locationId = null } = {}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('list_employees', {
+    p_include_inactive: includeInactive,
+    p_location_id: locationId,
+  });
+  if (error) throw normalizeRpcError(error, 'No se pudo cargar la nómina');
+  if (!data?.success) throw new Error(data?.error || 'No se pudo cargar la nómina');
+  return data;
+}
+
+export async function saveEmployee(employee) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('save_employee', {
+    p_employee_id: employee.id || null,
+    p_dni: employee.dni,
+    p_first_name: employee.firstName,
+    p_last_name: employee.lastName,
+    p_location_id: employee.locationId,
+    p_active: employee.active,
+  });
+  if (error) throw normalizeRpcError(error, 'No se pudo guardar el empleado');
+  if (!data?.success) throw new Error(data?.error || 'No se pudo guardar el empleado');
+  return data.employee;
+}
+
+export async function getEmployeeSchedule(employeeId) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('get_employee_schedule', {
+    p_employee_id: employeeId,
+  });
+  if (error) throw normalizeRpcError(error, 'No se pudo cargar la jornada');
+  if (!data?.success) throw new Error(data?.error || 'No se pudo cargar la jornada');
+  return data;
+}
+
+export async function saveEmployeeSchedule(employeeId, schedule) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('save_employee_schedule', {
+    p_employee_id: employeeId,
+    p_schedule: schedule,
+    p_timezone: appEnv.businessTimezone,
+  });
+  if (error) throw normalizeRpcError(error, 'No se pudo guardar la jornada');
+  if (!data?.success) throw new Error(data?.error || 'No se pudo guardar la jornada');
+  return data;
+}
+
+export async function listInconsistencies({ locationId, dateFrom, dateTo, status = 'OPEN' }) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('list_inconsistencies', {
+    p_location_id: locationId || null,
+    p_date_from: dateFrom || null,
+    p_date_to: dateTo || null,
+    p_status: status,
+    p_timezone: appEnv.businessTimezone,
+  });
+  if (error) throw normalizeRpcError(error, 'No se pudieron cargar las inconsistencias');
+  if (!data?.success) throw new Error(data?.error || 'No se pudieron cargar las inconsistencias');
   return data;
 }
