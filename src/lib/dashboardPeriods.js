@@ -115,6 +115,10 @@ export function formatDateKey(dateLike) {
   return `${year}-${month}-${day}`;
 }
 
+export function getBusinessTodayKey() {
+  return formatDateKey(toBusinessDate(new Date()));
+}
+
 export function getFortnightRangeForDate(dateLike) {
   const date = toSafeDate(dateLike);
   const dayOfMonth = date.getDate();
@@ -308,9 +312,8 @@ export function resolveDashboardPeriod(
   };
 }
 
-export function buildHoursDashboardParams({ email, locationId, period }) {
+export function buildHoursDashboardParams({ locationId, period }) {
   return {
-    email,
     locationId: locationId || null,
     startDate: period.startDate,
     endDate: period.endDate,

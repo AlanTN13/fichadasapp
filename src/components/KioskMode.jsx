@@ -590,6 +590,7 @@ export default function KioskMode({
                   <StatusNotice
                     tone="rose"
                     title={getCameraErrorMessage(cameraStatus)}
+                    description="Revisá el permiso de cámara del dispositivo."
                     actionLabel="Reintentar cámara"
                     onAction={startCamera}
                   />

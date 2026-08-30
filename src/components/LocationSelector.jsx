@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CheckCircle2, Loader2, MapPin, Warehouse } from 'lucide-react';
-import { getLocationsForEmail } from '../services/supabaseApi';
 import FlowStepIndicator from './FlowStepIndicator';
 
 function getLocationLabel(location) {
@@ -15,10 +14,9 @@ function getLocationDescription(name) {
 
 export default function LocationSelector({
   onSelectLocation,
-  email,
   initialLocations = [],
   loading = false,
-  onRetry,
+  onRetry = null,
 }) {
   const [locations, setLocations] = useState(initialLocations);
   const [selectedLocation, setSelectedLocation] = useState('');
@@ -29,28 +27,8 @@ export default function LocationSelector({
   }, [initialLocations]);
 
   useEffect(() => {
-    if (initialLocations.length > 0) {
-      return;
-    }
-
-    let isMounted = true;
-    const fetchLocations = async () => {
-      try {
-        const response = await getLocationsForEmail(email);
-        if (isMounted) {
-          setLocations(response);
-          setError(null);
-        }
-      } catch {
-        if (isMounted) setError('No se pudieron cargar las sedes.');
-      }
-    };
-
-    fetchLocations();
-    return () => {
-      isMounted = false;
-    };
-  }, [email, initialLocations]);
+    setError(initialLocations.length > 0 ? null : 'Esta cuenta no tiene una sede habilitada.');
+  }, [initialLocations.length]);
 
   const normalizedLocations = useMemo(
     () =>

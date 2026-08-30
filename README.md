@@ -6,8 +6,9 @@ Aplicación MVP para control de fichadas de Lavadero Nahuel.
 
 - `Vite + React` para la interfaz.
 - `Supabase` como fuente única de verdad.
-- `Supabase RPC` para:
-  - login por email;
+- `Supabase Auth` para email, contraseña y sesiones individuales.
+- `Supabase RPC` protegidas por la sesión para:
+  - resolver rol y sedes habilitadas;
   - consulta de estado del kiosco por DNI;
   - registro atómico de Inicio / Fin;
   - dashboard administrativo.
@@ -15,6 +16,16 @@ Aplicación MVP para control de fichadas de Lavadero Nahuel.
 - `localStorage` solo para:
   - cola offline;
   - cache visual del último estado conocido.
+
+## Fichadas 1.1
+
+El Super Admin puede administrar empleados, configurar sus jornadas semanales y revisar inconsistencias. La cuenta de Planta queda limitada a su sede y al flujo de kiosco.
+
+Las contraseñas viven únicamente en Supabase Auth. La aplicación no almacena contraseñas ni hashes propios.
+
+Guía de despliegue y aceptación:
+
+- [docs/fichadas-1.1-rollout.md](docs/fichadas-1.1-rollout.md)
 
 ## Regla funcional actual
 
@@ -76,8 +87,12 @@ Incluye:
 - bucket privado `time-entry-photos`;
 - políticas básicas;
 - RPCs:
-  - `login_with_email`
-  - `get_locations_for_email`
+  - `get_admin_context`
+  - `list_employees`
+  - `save_employee`
+  - `get_employee_schedule`
+  - `save_employee_schedule`
+  - `list_inconsistencies`
   - `get_kiosk_state_by_dni`
   - `record_time_entry`
   - `get_dashboard_summary`
@@ -107,7 +122,7 @@ La cola local:
 - no consolida el estado diario hasta confirmación del backend;
 - muestra fallos y permite reintento manual desde administración.
 
-## Dashboard
+## Portal administrativo
 
 Incluye:
 
@@ -117,7 +132,9 @@ Incluye:
 - Jornada finalizada;
 - Horas trabajadas;
 - tabla operativa;
-- panel de sincronización local.
+- administración de nómina;
+- jornadas esperadas por empleado;
+- revisión de inconsistencias persistidas.
 
 Filtros mínimos:
 
@@ -152,10 +169,4 @@ Esta versión ya:
 - agrega cola offline con idempotencia;
 - incorpora tests base, build, lint y typecheck.
 
-Todavía requiere:
-
-- configurar credenciales reales de Supabase;
-- ejecutar migraciones en un proyecto/dev database;
-- cargar datos iniciales;
-- validar el flujo real contra un entorno Supabase activo;
-- crear PR borrador y push final.
+La puesta en producción requiere crear las dos identidades de Auth, validar la migración en una base de desarrollo y ejecutar el checklist de `docs/fichadas-1.1-rollout.md`.
