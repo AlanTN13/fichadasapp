@@ -13,6 +13,10 @@ export async function signInWithPassword(email, password) {
     password,
   });
 
+  if (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(error?.message || '')) {
+    throw new Error('Tu correo todavía no fue confirmado. Revisá tu email y abrí el enlace de Supabase.');
+  }
+
   if (error) throw new Error('Email o contraseña incorrectos.');
   return data;
 }
