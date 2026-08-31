@@ -52,3 +52,14 @@ El navegador:
 - puede cachear estado para mostrar;
 - puede transportar eventos en cola offline;
 - pero no decide la regla final de Inicio / Fin.
+
+## Jornadas fijas y rotativas
+
+La jornada se configura para cada empleado después de su alta. El DNI identifica al empleado al fichar, pero no define su horario.
+
+Hay dos modalidades:
+
+1. `Semanal fija`: se repiten los mismos siete días todas las semanas.
+2. `Rotación de 2 semanas`: se configuran una Semana A y una Semana B. El administrador elige el lunes en que comienza la Semana A y el sistema alterna ambas semanas automáticamente.
+
+Cada día de cada semana puede configurarse como laboral o franco, con horario esperado de ingreso, salida y tolerancia. Esto permite representar domingos alternados y el franco compensatorio correspondiente sin atar la lógica a empleados concretos.

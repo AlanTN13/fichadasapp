@@ -11,7 +11,7 @@ const EMPTY_FORM = {
   active: true,
 };
 
-export default function EmployeeManagement() {
+export default function EmployeeManagement({ onConfigureSchedule }) {
   const [employees, setEmployees] = useState([]);
   const [locations, setLocations] = useState([]);
   const [search, setSearch] = useState('');
@@ -72,14 +72,16 @@ export default function EmployeeManagement() {
 
   const submitForm = async (event) => {
     event.preventDefault();
+    const configureAfterSave = event.nativeEvent.submitter?.value === 'schedule';
     setSavingId(form.id || 'new');
     setError('');
     setNotice('');
     try {
-      await saveEmployee(form);
+      const savedEmployee = await saveEmployee(form);
       setNotice(form.id ? 'Datos del empleado actualizados.' : 'Empleado incorporado correctamente.');
       setForm(null);
       await loadData();
+      if (configureAfterSave) onConfigureSchedule?.(savedEmployee.id);
     } catch (saveError) {
       setError(saveError.message || 'No se pudo guardar el empleado');
     } finally {
@@ -176,7 +178,14 @@ export default function EmployeeManagement() {
                   </div>
                   <p className="mt-1 text-sm text-slate-500">DNI {employee.dni} · {employee.location_name}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onConfigureSchedule?.(employee.id)}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 px-3 text-sm font-medium text-blue-700"
+                  >
+                    Jornada
+                  </button>
                   <button
                     type="button"
                     onClick={() => openEdit(employee)}
@@ -241,10 +250,13 @@ export default function EmployeeManagement() {
               </label>
             )}
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => setForm(null)} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700">Cancelar</button>
-              <button type="submit" disabled={Boolean(savingId)} className="min-h-11 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white">
+              <button type="submit" value="save" disabled={Boolean(savingId)} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700">
                 {savingId ? 'Guardando...' : 'Guardar empleado'}
+              </button>
+              <button type="submit" value="schedule" disabled={Boolean(savingId)} className="min-h-11 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white">
+                {savingId ? 'Guardando...' : 'Guardar y configurar jornada'}
               </button>
             </div>
           </form>

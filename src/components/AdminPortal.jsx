@@ -14,6 +14,12 @@ const SECTIONS = [
 
 export default function AdminPortal({ context, onLogout }) {
   const [section, setSection] = useState('hours');
+  const [scheduleEmployeeId, setScheduleEmployeeId] = useState('');
+
+  const openEmployeeSchedule = (employeeId) => {
+    setScheduleEmployeeId(employeeId);
+    setSection('schedules');
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#f5f7fa]">
@@ -41,8 +47,8 @@ export default function AdminPortal({ context, onLogout }) {
 
       <main className="min-h-0 flex-1 overflow-y-auto">
         {section === 'hours' && <Dashboard />}
-        {section === 'employees' && <EmployeeManagement />}
-        {section === 'schedules' && <ScheduleManagement />}
+        {section === 'employees' && <EmployeeManagement onConfigureSchedule={openEmployeeSchedule} />}
+        {section === 'schedules' && <ScheduleManagement initialEmployeeId={scheduleEmployeeId} />}
         {section === 'inconsistencies' && <Inconsistencies />}
       </main>
     </div>

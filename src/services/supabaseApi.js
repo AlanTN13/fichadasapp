@@ -169,11 +169,15 @@ export async function getEmployeeSchedule(employeeId) {
   return data;
 }
 
-export async function saveEmployeeSchedule(employeeId, schedule) {
+export async function saveEmployeeSchedule(employeeId, scheduleConfig) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc('save_employee_schedule', {
     p_employee_id: employeeId,
-    p_schedule: schedule,
+    p_schedule: {
+      cycle_weeks: scheduleConfig.cycleWeeks,
+      cycle_anchor_date: scheduleConfig.cycleAnchorDate,
+      days: scheduleConfig.days,
+    },
     p_timezone: appEnv.businessTimezone,
   });
   if (error) throw normalizeRpcError(error, 'No se pudo guardar la jornada');
