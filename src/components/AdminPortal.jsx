@@ -4,12 +4,14 @@ import Dashboard from './Dashboard';
 import EmployeeManagement from './EmployeeManagement';
 import ScheduleManagement from './ScheduleManagement';
 import Inconsistencies from './Inconsistencies';
+import FortnightlyAttendance from './FortnightlyAttendance';
 
 const SECTIONS = [
   { id: 'hours', label: 'Horas', icon: Clock3 },
   { id: 'employees', label: 'Empleados', icon: Users },
   { id: 'schedules', label: 'Jornadas', icon: CalendarClock },
   { id: 'inconsistencies', label: 'Inconsistencias', icon: AlertTriangle },
+  { id: 'fortnight', label: 'Resumen quincenal', icon: CalendarClock },
 ];
 
 export default function AdminPortal({ context, onLogout }) {
@@ -50,6 +52,7 @@ export default function AdminPortal({ context, onLogout }) {
         {section === 'employees' && <EmployeeManagement onConfigureSchedule={openEmployeeSchedule} />}
         {section === 'schedules' && <ScheduleManagement initialEmployeeId={scheduleEmployeeId} />}
         {section === 'inconsistencies' && <Inconsistencies />}
+        {section === 'fortnight' && <FortnightlyAttendance />}
       </main>
     </div>
   );

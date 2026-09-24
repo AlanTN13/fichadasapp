@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { listInconsistencies } from '../services/supabaseApi';
+import { listInconsistencies, reviewInconsistency } from '../services/supabaseApi';
 import { getBusinessTodayKey } from '../lib/dashboardPeriods';
 
 const TYPE_LABELS = {
@@ -25,7 +25,7 @@ function defaultDateFrom() {
 export default function Inconsistencies() {
   const [items, setItems] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [counts, setCounts] = useState({ open: 0, resolved: 0 });
+  const [counts, setCounts] = useState({ open: 0, resolved: 0, justified: 0, unjustified: 0 });
   const [filters, setFilters] = useState({
     locationId: '',
     dateFrom: defaultDateFrom(),
@@ -34,6 +34,7 @@ export default function Inconsistencies() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [savingId, setSavingId] = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -53,6 +54,19 @@ export default function Inconsistencies() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const saveReview = async (inconsistencyId, reviewStatus) => {
+    setSavingId(inconsistencyId);
+    setError('');
+    try {
+      await reviewInconsistency(inconsistencyId, reviewStatus);
+      await loadData();
+    } catch (saveError) {
+      setError(saveError.message || 'No se pudo guardar la justificación');
+    } finally {
+      setSavingId('');
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 p-4 md:p-6">
@@ -79,9 +93,11 @@ export default function Inconsistencies() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Pendientes</p><p className="mt-1 text-2xl font-bold text-amber-900">{counts.open || 0}</p></div>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Resueltas</p><p className="mt-1 text-2xl font-bold text-emerald-900">{counts.resolved || 0}</p></div>
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Justificadas</p><p className="mt-1 text-2xl font-bold text-blue-900">{counts.justified || 0}</p></div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-600">No justificadas</p><p className="mt-1 text-2xl font-bold text-slate-900">{counts.unjustified || 0}</p></div>
       </div>
 
       {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
@@ -94,11 +110,29 @@ export default function Inconsistencies() {
         ) : (
           <div className="divide-y divide-slate-100">
             {items.map((item) => (
-              <article key={item.id} className="grid gap-3 p-4 md:grid-cols-[1.4fr_1fr_1fr_auto] md:items-center">
+              <article key={item.id} className="grid gap-3 p-4 lg:grid-cols-[1.25fr_0.9fr_0.9fr_1.4fr] lg:items-center">
                 <div><p className="font-semibold text-slate-900">{item.employee_name}</p><p className="mt-1 text-xs text-slate-500">DNI {item.dni} · {item.location_name}</p></div>
-                <div><p className="text-sm font-semibold text-amber-700">{TYPE_LABELS[item.type] || item.type}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.business_date)}</p></div>
+                <div><p className="text-sm font-semibold text-amber-700">{TYPE_LABELS[item.type] || item.type}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.business_date)}{item.type === 'LATE_ARRIVAL' ? ` · ${item.late_minutes || 0} min` : ''}</p></div>
                 <div className="text-sm text-slate-600"><p>Esperado: <strong className="text-slate-900">{item.expected_time || '—'}</strong></p><p>Real: <strong className="text-slate-900">{item.actual_time || 'Sin fichada'}</strong></p></div>
-                <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === 'OPEN' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{item.status === 'OPEN' ? 'Pendiente' : 'Resuelta'}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={savingId === item.id}
+                    onClick={() => saveReview(item.id, 'JUSTIFIED')}
+                    className={`min-h-10 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50 ${item.review_status === 'JUSTIFIED' ? 'border-blue-600 bg-blue-600 text-white' : 'border-blue-200 bg-white text-blue-700'}`}
+                  >
+                    Justificada
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingId === item.id}
+                    onClick={() => saveReview(item.id, 'UNJUSTIFIED')}
+                    className={`min-h-10 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50 ${item.review_status === 'UNJUSTIFIED' ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                  >
+                    No justificada
+                  </button>
+                  {!item.review_status && <span className="text-xs font-medium text-amber-700">Sin revisar</span>}
+                </div>
               </article>
             ))}
           </div>
