@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
 import { getHoursDashboard } from '../services/supabaseApi';
 import {
   buildHoursDashboardParams,
@@ -14,6 +14,7 @@ import {
   formatHoursMinutes,
   hasAnyEntries,
 } from '../lib/dashboardHours';
+import { useAdminSessionState } from '../hooks/useAdminSessionState';
 
 const PERIOD_OPTIONS = [
   PERIOD_PRESETS.THIS_WEEK,
@@ -31,6 +32,7 @@ const STATUS_OPTIONS = [
 ];
 
 const DEFAULT_FILTERS = {
+  search: '',
   locationId: '',
   periodPreset: PERIOD_PRESETS.THIS_WEEK,
   customStart: '',
@@ -43,7 +45,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [locationOptions, setLocationOptions] = useState([]);
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [filters, setFilters] = useAdminSessionState('hours.filters', DEFAULT_FILTERS);
   const [mobileDraftFilters, setMobileDraftFilters] = useState(DEFAULT_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -101,9 +103,14 @@ export default function Dashboard() {
   );
 
   const visibleTableRows = useMemo(() => {
-    if (filters.status === 'all') return tableRows;
+    const searchTerm = filters.search.trim().toLowerCase();
+    const searchedRows = searchTerm
+      ? tableRows.filter((row) => `${row.employeeName} ${row.dni}`.toLowerCase().includes(searchTerm))
+      : tableRows;
 
-    return tableRows.filter((row) => {
+    if (filters.status === 'all') return searchedRows;
+
+    return searchedRows.filter((row) => {
       if (filters.status === 'working') {
         return row.dayCells.some((cell) => cell.state === 'WORKING');
       }
@@ -114,7 +121,7 @@ export default function Dashboard() {
 
       return row.dayCells.every((cell) => cell.state === 'NOT_STARTED');
     });
-  }, [filters.status, tableRows]);
+  }, [filters.search, filters.status, tableRows]);
 
   const totalGeneralLabel = useMemo(
     () => formatHoursMinutes(dashboard?.summary?.total_period_hours, '00:00'),
@@ -125,6 +132,7 @@ export default function Dashboard() {
   const showEmptyEntriesMessage = tableRows.length > 0 && !hasAnyEntries(tableRows);
   const periodTotalLabel = getPeriodTotalLabel(filters.periodPreset);
   const activeFilterCount = [
+    Boolean(filters.search.trim()),
     Boolean(filters.locationId),
     filters.periodPreset !== PERIOD_PRESETS.THIS_WEEK,
     filters.status !== 'all',
@@ -158,6 +166,7 @@ export default function Dashboard() {
 
   const removeMobileFilter = (filterName) => {
     setFilters((current) => {
+      if (filterName === 'search') return { ...current, search: '' };
       if (filterName === 'location') return { ...current, locationId: '' };
       if (filterName === 'period') {
         return {
@@ -249,7 +258,21 @@ export default function Dashboard() {
             </button>
           </div>
 
-          <div className="mt-4 hidden gap-3 md:grid md:grid-cols-[minmax(0,220px)_minmax(0,220px)_auto]">
+          <div className="mt-4 hidden gap-3 md:grid md:grid-cols-[minmax(180px,1.2fr)_minmax(150px,0.8fr)_minmax(170px,0.9fr)_minmax(170px,0.9fr)_auto]">
+            <label className="flex flex-col gap-1 text-sm text-slate-600">
+              <span className="font-medium">Buscar persona</span>
+              <span className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+                <input
+                  type="search"
+                  value={filters.search}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
+                  placeholder="Nombre o DNI"
+                  className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900"
+                />
+              </span>
+            </label>
+
             <label className="flex flex-col gap-1 text-sm text-slate-600">
               <span className="font-medium">Sede</span>
               <select
@@ -287,6 +310,19 @@ export default function Dashboard() {
                   <option key={periodOption} value={periodOption}>
                     {getPresetLabel(periodOption)}
                   </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-sm text-slate-600">
+              <span className="font-medium">Estado</span>
+              <select
+                value={filters.status}
+                onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              >
+                {STATUS_OPTIONS.map((statusOption) => (
+                  <option key={statusOption.value} value={statusOption.value}>{statusOption.label}</option>
                 ))}
               </select>
             </label>
@@ -337,6 +373,17 @@ export default function Dashboard() {
         </header>
 
         <div className="flex flex-wrap gap-2 md:hidden" aria-label="Filtros activos">
+          {filters.search.trim() && (
+            <button
+              type="button"
+              onClick={() => removeMobileFilter('search')}
+              aria-label={`Quitar búsqueda ${filters.search}`}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-slate-900 px-3 text-xs font-semibold text-white"
+            >
+              {filters.search}
+              <X aria-hidden="true" size={14} />
+            </button>
+          )}
           {filters.locationId && (
             <button
               type="button"
@@ -565,9 +612,23 @@ export default function Dashboard() {
 
             <div className="mt-4 grid gap-4">
               <label className="flex flex-col gap-1.5 text-sm text-slate-700">
+                <span className="font-semibold">Buscar persona</span>
+                <span className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    ref={firstFilterRef}
+                    type="search"
+                    value={mobileDraftFilters.search}
+                    onChange={(event) => setMobileDraftFilters((current) => ({ ...current, search: event.target.value }))}
+                    placeholder="Nombre o DNI"
+                    className="min-h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-base text-slate-900"
+                  />
+                </span>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm text-slate-700">
                 <span className="font-semibold">Fecha</span>
                 <select
-                  ref={firstFilterRef}
                   value={mobileDraftFilters.periodPreset}
                   onChange={(event) =>
                     setMobileDraftFilters((current) => ({

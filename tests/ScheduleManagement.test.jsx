@@ -34,6 +34,7 @@ describe('ScheduleManagement', () => {
   let root;
 
   beforeEach(() => {
+    window.sessionStorage.clear();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -74,5 +75,27 @@ describe('ScheduleManagement', () => {
     expect(configuration.cycleAnchorDate).toBe('2026-08-31');
     expect(configuration.days).toHaveLength(14);
     expect(configuration.days.filter((day) => day.cycle_week === 2)).toHaveLength(7);
+  });
+
+  it('avisa por cambios pendientes y permite restablecer la jornada guardada', async () => {
+    const dirtySpy = vi.fn();
+    await act(async () => {
+      root.render(<ScheduleManagement initialEmployeeId="employee-1" onDirtyChange={dirtySpy} />);
+    });
+    await act(async () => Promise.resolve());
+
+    const firstWorkingDay = container.querySelector('input[type="checkbox"]');
+    await act(async () => firstWorkingDay.click());
+
+    expect(container.textContent).toContain('Hay cambios sin guardar.');
+    expect(dirtySpy).toHaveBeenLastCalledWith(true);
+
+    const resetButton = [...container.querySelectorAll('button')]
+      .find((button) => button.textContent.includes('Restablecer'));
+    await act(async () => resetButton.click());
+
+    expect(container.textContent).toContain('Se restauró la última jornada guardada.');
+    expect(dirtySpy).toHaveBeenLastCalledWith(false);
+    expect(firstWorkingDay.checked).toBe(true);
   });
 });
