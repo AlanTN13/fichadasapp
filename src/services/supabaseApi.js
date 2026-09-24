@@ -198,3 +198,27 @@ export async function listInconsistencies({ locationId, dateFrom, dateTo, status
   if (!data?.success) throw new Error(data?.error || 'No se pudieron cargar las inconsistencias');
   return data;
 }
+
+export async function reviewInconsistency(inconsistencyId, reviewStatus) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('set_inconsistency_review', {
+    p_inconsistency_id: inconsistencyId,
+    p_review_status: reviewStatus,
+  });
+  if (error) throw normalizeRpcError(error, 'No se pudo guardar la justificación');
+  if (!data?.success) throw new Error(data?.error || 'No se pudo guardar la justificación');
+  return data;
+}
+
+export async function getFortnightlyAttendanceSummary({ locationId, startDate, endDate }) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('get_fortnightly_attendance_summary', {
+    p_location_id: locationId || null,
+    p_period_start: startDate,
+    p_period_end: endDate,
+    p_timezone: appEnv.businessTimezone,
+  });
+  if (error) throw normalizeRpcError(error, 'No se pudo cargar el resumen quincenal');
+  if (!data?.success) throw new Error(data?.error || 'No se pudo cargar el resumen quincenal');
+  return data;
+}
