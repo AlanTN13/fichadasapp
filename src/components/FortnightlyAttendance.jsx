@@ -141,7 +141,7 @@ export default function FortnightlyAttendance() {
 
       <section className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Fichadas de hoy</p><p className="mt-1 text-2xl font-bold text-blue-950">{attendance.clocked_in || 0} de {attendance.scheduled || 0} ficharon</p></div>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Irregularidades</p><p className="mt-1 text-2xl font-bold text-rose-950">{irregularities.length}</p><p className="mt-1 text-xs text-rose-700">30 minutos o más de tardanzas no justificadas</p></div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Irregularidades</p><p className="mt-1 text-2xl font-bold text-rose-950">{irregularities.length}</p><p className="mt-1 text-xs text-rose-700">30 minutos o más acumulados según la regla vigente</p></div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Ausencias</p><p className="mt-1 text-2xl font-bold text-amber-950">{absences.length}</p><p className="mt-1 text-xs text-amber-700">Jornada esperada sin fichadas</p></div>
       </section>
 
