@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarClock, Copy, Save } from 'lucide-react';
+import { CalendarClock, Copy, RotateCcw, Save, Search } from 'lucide-react';
 import { getEmployeeSchedule, listEmployees, saveEmployeeSchedule } from '../services/supabaseApi';
+import { useAdminSessionState } from '../hooks/useAdminSessionState';
 
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -54,9 +55,14 @@ function isMonday(dateValue) {
   return new Date(`${dateValue}T00:00:00Z`).getUTCDay() === 1;
 }
 
-export default function ScheduleManagement({ initialEmployeeId = '' }) {
+function scheduleSnapshot(cycleWeeks, anchorDate, days) {
+  return JSON.stringify({ cycleWeeks, anchorDate, days });
+}
+
+export default function ScheduleManagement({ initialEmployeeId = '', onDirtyChange = undefined }) {
   const [employees, setEmployees] = useState([]);
-  const [selectedId, setSelectedId] = useState(initialEmployeeId);
+  const [selectedId, setSelectedId] = useAdminSessionState('schedules.selectedId', initialEmployeeId);
+  const [search, setSearch] = useAdminSessionState('schedules.search', '');
   const [cycleWeeks, setCycleWeeks] = useState(1);
   const [activeWeek, setActiveWeek] = useState(1);
   const [anchorDate, setAnchorDate] = useState(currentMonday);
@@ -65,6 +71,21 @@ export default function ScheduleManagement({ initialEmployeeId = '' }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [savedSnapshot, setSavedSnapshot] = useState('');
+
+  const currentSnapshot = useMemo(
+    () => scheduleSnapshot(cycleWeeks, anchorDate, schedule),
+    [anchorDate, cycleWeeks, schedule]
+  );
+  const dirty = Boolean(savedSnapshot) && currentSnapshot !== savedSnapshot;
+
+  const filteredEmployees = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return employees;
+    return employees.filter((employee) => (
+      `${employee.first_name} ${employee.last_name} ${employee.dni}`.toLowerCase().includes(term)
+    ));
+  }, [employees, search]);
 
   const loadEmployees = useCallback(async () => {
     setLoading(true);
@@ -72,21 +93,21 @@ export default function ScheduleManagement({ initialEmployeeId = '' }) {
     try {
       const response = await listEmployees({ includeInactive: true });
       setEmployees(response.employees || []);
-      setSelectedId((current) => initialEmployeeId || current || response.employees?.[0]?.id || '');
+      setSelectedId((current) => (
+        response.employees?.some((employee) => employee.id === current)
+          ? current
+          : response.employees?.[0]?.id || ''
+      ));
     } catch (loadError) {
       setError(loadError.message || 'No se pudieron cargar los empleados');
     } finally {
       setLoading(false);
     }
-  }, [initialEmployeeId]);
+  }, [setSelectedId]);
 
   useEffect(() => {
     loadEmployees();
   }, [loadEmployees]);
-
-  useEffect(() => {
-    if (initialEmployeeId) setSelectedId(initialEmployeeId);
-  }, [initialEmployeeId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -102,11 +123,28 @@ export default function ScheduleManagement({ initialEmployeeId = '' }) {
         setActiveWeek(1);
         setAnchorDate(normalized.anchorDate);
         setSchedule(normalized.days);
+        setSavedSnapshot(scheduleSnapshot(normalized.cycleWeeks, normalized.anchorDate, normalized.days));
       })
       .catch((loadError) => active && setError(loadError.message || 'No se pudo cargar la jornada'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [selectedId]);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const warnBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [dirty]);
 
   const visibleDays = useMemo(
     () => schedule.filter((day) => day.cycle_week === activeWeek),
@@ -142,6 +180,22 @@ export default function ScheduleManagement({ initialEmployeeId = '' }) {
     setNotice('Semana A copiada. Ajustá los francos y días rotativos de la Semana B.');
   };
 
+  const selectEmployee = (nextEmployeeId) => {
+    if (dirty && !window.confirm('Hay cambios de jornada sin guardar. ¿Querés descartarlos?')) return;
+    setSelectedId(nextEmployeeId);
+  };
+
+  const resetChanges = () => {
+    if (!savedSnapshot) return;
+    const saved = JSON.parse(savedSnapshot);
+    setCycleWeeks(saved.cycleWeeks);
+    setActiveWeek(1);
+    setAnchorDate(saved.anchorDate);
+    setSchedule(saved.days);
+    setError('');
+    setNotice('Cambios descartados. Se restauró la última jornada guardada.');
+  };
+
   const handleSave = async () => {
     if (cycleWeeks === 2 && !isMonday(anchorDate)) {
       setError('Elegí un lunes como inicio de la Semana A.');
@@ -164,6 +218,7 @@ export default function ScheduleManagement({ initialEmployeeId = '' }) {
           tolerance_minutes: day.working_day ? Number(day.tolerance_minutes || 0) : 0,
         })),
       });
+      setSavedSnapshot(currentSnapshot);
       setNotice(cycleWeeks === 2
         ? 'Rotación de dos semanas guardada. El sistema alternará automáticamente.'
         : 'Jornada semanal guardada. Los cambios rigen desde hoy.');
@@ -184,16 +239,26 @@ export default function ScheduleManagement({ initialEmployeeId = '' }) {
             <h2 className="mt-1 text-2xl font-bold text-slate-900">Jornadas esperadas</h2>
           </div>
         </div>
-        <label className="mt-5 grid max-w-md gap-1.5 text-sm font-medium text-slate-700">
-          Empleado
-          <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} className="min-h-11 rounded-xl border border-slate-300 bg-white px-3">
-            {employees.map((employee) => (
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+            Buscar persona
+            <span className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nombre o DNI" className="min-h-11 w-full rounded-xl border border-slate-300 pl-10 pr-3" />
+            </span>
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+            Empleado
+            <select value={filteredEmployees.some((employee) => employee.id === selectedId) ? selectedId : ''} onChange={(event) => selectEmployee(event.target.value)} className="min-h-11 rounded-xl border border-slate-300 bg-white px-3">
+              {!filteredEmployees.some((employee) => employee.id === selectedId) && <option value="" disabled>Elegí uno de {filteredEmployees.length} resultados</option>}
+              {filteredEmployees.map((employee) => (
               <option key={employee.id} value={employee.id}>
-                {employee.last_name}, {employee.first_name}{employee.active ? '' : ' · Inactivo'}
+                {employee.first_name} {employee.last_name}{employee.active ? '' : ' · Inactivo'}
               </option>
             ))}
-          </select>
-        </label>
+            </select>
+          </label>
+        </div>
       </header>
 
       {(error || notice) && (
@@ -265,10 +330,18 @@ export default function ScheduleManagement({ initialEmployeeId = '' }) {
                 </article>
               ))}
             </div>
-            <div className="mt-5 flex justify-end">
-              <button type="button" onClick={handleSave} disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white">
+            <div className="sticky bottom-0 z-10 -mx-4 mt-5 flex flex-col gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:flex-row md:items-center md:justify-between md:px-6">
+              <p className={`text-sm ${error ? 'text-rose-700' : 'text-emerald-700'}`} aria-live="polite">
+                {error || notice || (dirty ? 'Hay cambios sin guardar.' : '')}
+              </p>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={resetChanges} disabled={!dirty || saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-50">
+                  <RotateCcw size={16} /> Restablecer
+                </button>
+                <button type="button" onClick={handleSave} disabled={saving || !dirty} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white disabled:opacity-50">
                 <Save size={17} /> {saving ? 'Guardando...' : 'Guardar jornada'}
-              </button>
+                </button>
+              </div>
             </div>
           </>
         )}

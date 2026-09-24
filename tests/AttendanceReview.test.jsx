@@ -27,11 +27,17 @@ async function flush() {
   await act(async () => Promise.resolve());
 }
 
+function changeInput(input, value) {
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 describe('attendance review', () => {
   let container;
   let root;
 
   beforeEach(() => {
+    window.sessionStorage.clear();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -136,5 +142,53 @@ describe('attendance review', () => {
     expect(container.textContent).toContain('Alcanzada');
     expect(container.textContent).toContain('72:30');
     expect(container.textContent).toContain('Jornada esperada sin entrada ni salida');
+  });
+
+  it('no cuenta una inconsistencia sin revisar como no justificada', async () => {
+    listInconsistenciesMock.mockResolvedValue({
+      locations: [],
+      inconsistencies: [
+        { id: 'pending', employee_name: 'Ana Pérez', dni: '123', location_name: 'Planta', business_date: '2026-09-20', type: 'LATE_ARRIVAL', status: 'OPEN', review_status: null },
+        { id: 'reviewed', employee_name: 'Luis Díaz', dni: '456', location_name: 'Planta', business_date: '2026-09-20', type: 'LATE_ARRIVAL', status: 'RESOLVED', review_status: 'UNJUSTIFIED' },
+      ],
+    });
+
+    await act(async () => root.render(<Inconsistencies />));
+    await flush();
+
+    const classification = [...container.querySelectorAll('section')]
+      .find((section) => section.textContent.includes('Clasificación'));
+    expect(classification.textContent).toContain('Sin revisar1');
+    expect(classification.textContent).toContain('No justificadas1');
+  });
+
+  it('separa pendientes de no justificadas en el resumen y conserva el filtro en la sesión', async () => {
+    getSummaryMock.mockResolvedValue({
+      locations: [],
+      today_attendance: { clocked_in: 1, scheduled: 2 },
+      rows: [
+        { employee_id: 'employee-1', employee_name: 'Ana Pérez', dni: '123', location_name: 'Planta', late_arrivals: 2, absences: 0, justified: 0, unjustified: 2, pending_review: 1, late_minutes: 33, is_irregular: true, total_hours: 50 },
+        { employee_id: 'employee-2', employee_name: 'Luis Díaz', dni: '456', location_name: 'Planta', late_arrivals: 0, absences: 0, justified: 0, unjustified: 0, pending_review: 0, late_minutes: 0, is_irregular: false, total_hours: 40 },
+      ],
+      absences: [],
+    });
+
+    await act(async () => root.render(<FortnightlyAttendance />));
+    await flush();
+
+    const search = container.querySelector('input[type="search"]');
+    await act(async () => {
+      changeInput(search, '123');
+    });
+
+    expect(container.textContent).toContain('Ana Pérez');
+    expect(container.textContent).not.toContain('Luis Díaz');
+    expect(window.sessionStorage.getItem('fichadas.admin.summary.filters')).toContain('123');
+
+    const anaRow = [...container.querySelectorAll('tbody tr')]
+      .find((row) => row.textContent.includes('Ana Pérez'));
+    const cells = [...anaRow.querySelectorAll('td')].map((cell) => cell.textContent.trim());
+    expect(cells[3]).toBe('1');
+    expect(cells[5]).toBe('1');
   });
 });

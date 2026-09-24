@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pencil, Plus, Search, UserCheck, UserX, X } from 'lucide-react';
 import { listEmployees, saveEmployee } from '../services/supabaseApi';
+import { useAdminSessionState } from '../hooks/useAdminSessionState';
 
 const EMPTY_FORM = {
   id: null,
@@ -14,8 +15,8 @@ const EMPTY_FORM = {
 export default function EmployeeManagement({ onConfigureSchedule }) {
   const [employees, setEmployees] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [search, setSearch] = useState('');
-  const [showInactive, setShowInactive] = useState(true);
+  const [search, setSearch] = useAdminSessionState('employees.search', '');
+  const [showInactive, setShowInactive] = useAdminSessionState('employees.showInactive', true);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState('');
