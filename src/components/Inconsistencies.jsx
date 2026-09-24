@@ -1,7 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { listInconsistencies, reviewInconsistency } from '../services/supabaseApi';
-import { getBusinessTodayKey } from '../lib/dashboardPeriods';
+import {
+  getPresetLabel,
+  PERIOD_PRESETS,
+  resolveDashboardPeriod,
+} from '../lib/dashboardPeriods';
 
 const TYPE_LABELS = {
   LATE_ARRIVAL: 'Llegada tarde',
@@ -16,11 +20,13 @@ function formatDate(date) {
   return `${day}/${month}/${year}`;
 }
 
-function defaultDateFrom() {
-  const date = new Date(`${getBusinessTodayKey()}T12:00:00`);
-  date.setDate(date.getDate() - 30);
-  return date.toISOString().slice(0, 10);
-}
+const PERIOD_OPTIONS = [
+  PERIOD_PRESETS.THIS_WEEK,
+  PERIOD_PRESETS.PREVIOUS_WEEK,
+  PERIOD_PRESETS.FIRST_FORTNIGHT,
+  PERIOD_PRESETS.SECOND_FORTNIGHT,
+  PERIOD_PRESETS.CUSTOM,
+];
 
 export default function Inconsistencies() {
   const [items, setItems] = useState([]);
@@ -28,19 +34,35 @@ export default function Inconsistencies() {
   const [counts, setCounts] = useState({ open: 0, resolved: 0, justified: 0, unjustified: 0 });
   const [filters, setFilters] = useState({
     locationId: '',
-    dateFrom: defaultDateFrom(),
-    dateTo: getBusinessTodayKey(),
+    periodPreset: PERIOD_PRESETS.THIS_WEEK,
+    customStart: '',
+    customEnd: '',
     status: 'OPEN',
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState('');
 
+  const selectedPeriod = useMemo(
+    () => resolveDashboardPeriod(filters.periodPreset, {
+      customStart: filters.customStart,
+      customEnd: filters.customEnd,
+    }),
+    [filters.customEnd, filters.customStart, filters.periodPreset]
+  );
+
+  const requestFilters = useMemo(() => ({
+    locationId: filters.locationId,
+    dateFrom: selectedPeriod.startDate,
+    dateTo: selectedPeriod.endDate,
+    status: filters.status,
+  }), [filters.locationId, filters.status, selectedPeriod.endDate, selectedPeriod.startDate]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await listInconsistencies(filters);
+      const response = await listInconsistencies(requestFilters);
       setItems(response.inconsistencies || []);
       setLocations(response.locations || []);
       setCounts(response.counts || { open: 0, resolved: 0 });
@@ -49,7 +71,7 @@ export default function Inconsistencies() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [requestFilters]);
 
   useEffect(() => {
     loadData();
@@ -85,12 +107,18 @@ export default function Inconsistencies() {
           </button>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Desde<input type="date" value={filters.dateFrom} onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))} className="min-h-11 rounded-xl border border-slate-300 px-3 text-sm font-normal text-slate-900" /></label>
-          <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Hasta<input type="date" value={filters.dateTo} onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))} className="min-h-11 rounded-xl border border-slate-300 px-3 text-sm font-normal text-slate-900" /></label>
-          <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Sede<select value={filters.locationId} onChange={(event) => setFilters((current) => ({ ...current, locationId: event.target.value }))} className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900"><option value="">Todas</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
-          <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Estado<select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900"><option value="OPEN">Pendientes</option><option value="RESOLVED">Resueltas</option><option value="ALL">Todas</option></select></label>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="grid gap-1 text-sm text-slate-600">Sede<select value={filters.locationId} onChange={(event) => setFilters((current) => ({ ...current, locationId: event.target.value }))} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"><option value="">Todas las sedes</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
+          <label className="grid gap-1 text-sm text-slate-600">Periodo<select value={filters.periodPreset} onChange={(event) => setFilters((current) => ({ ...current, periodPreset: event.target.value }))} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">{PERIOD_OPTIONS.map((periodOption) => <option key={periodOption} value={periodOption}>{getPresetLabel(periodOption)}</option>)}</select></label>
+          <label className="grid gap-1 text-sm text-slate-600">Estado<select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"><option value="OPEN">Pendientes</option><option value="RESOLVED">Resueltas</option><option value="ALL">Todas</option></select></label>
         </div>
+
+        {filters.periodPreset === PERIOD_PRESETS.CUSTOM && (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-sm text-slate-600">Desde<input type="date" value={filters.customStart} onChange={(event) => setFilters((current) => ({ ...current, customStart: event.target.value }))} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900" /></label>
+            <label className="grid gap-1 text-sm text-slate-600">Hasta<input type="date" value={filters.customEnd} onChange={(event) => setFilters((current) => ({ ...current, customEnd: event.target.value }))} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900" /></label>
+          </div>
+        )}
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

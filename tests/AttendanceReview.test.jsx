@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Inconsistencies from '../src/components/Inconsistencies';
 import FortnightlyAttendance from '../src/components/FortnightlyAttendance';
+import { PERIOD_PRESETS } from '../src/lib/dashboardPeriods';
 import {
   getFortnightlyAttendanceSummary,
   listInconsistencies,
@@ -71,6 +72,36 @@ describe('attendance review', () => {
 
     expect(reviewInconsistencyMock).toHaveBeenCalledWith('inc-1', 'JUSTIFIED');
     expect(container.textContent).toContain('35 min');
+  });
+
+  it('usa los mismos periodos del filtro de Horas', async () => {
+    listInconsistenciesMock.mockResolvedValue({
+      counts: { open: 0, resolved: 0, justified: 0, unjustified: 0 },
+      locations: [],
+      inconsistencies: [],
+    });
+
+    await act(async () => root.render(<Inconsistencies />));
+    await flush();
+
+    const periodSelect = [...container.querySelectorAll('select')]
+      .find((select) => select.parentElement.textContent.startsWith('Periodo'));
+    const labels = [...periodSelect.options].map((option) => option.textContent);
+
+    expect(labels).toEqual([
+      'Esta semana',
+      'Semana anterior',
+      'Primera quincena',
+      'Segunda quincena',
+      'Personalizado',
+    ]);
+
+    await act(async () => {
+      periodSelect.value = PERIOD_PRESETS.CUSTOM;
+      periodSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(container.querySelectorAll('input[type="date"]')).toHaveLength(2);
   });
 
   it('muestra por separado irregularidades, ausentes, fichadas y horas quincenales', async () => {
