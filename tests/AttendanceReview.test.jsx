@@ -50,23 +50,28 @@ describe('attendance review', () => {
     vi.clearAllMocks();
   });
 
-  it('clasifica una inconsistencia sin modificar la fichada original', async () => {
-    listInconsistenciesMock.mockResolvedValue({
+  it('mueve una inconsistencia clasificada de pendiente a resuelta', async () => {
+    const inconsistency = {
+      id: 'inc-1',
+      employee_name: 'Ana Pérez',
+      dni: '123',
+      location_name: 'Planta',
+      business_date: '2026-09-20',
+      type: 'LATE_ARRIVAL',
+      expected_time: '08:00',
+      actual_time: '08:35',
+      late_minutes: 35,
+      review_status: null,
+    };
+
+    listInconsistenciesMock.mockResolvedValueOnce({
       counts: { open: 1, resolved: 0, justified: 0, unjustified: 1 },
       locations: [],
-      inconsistencies: [{
-        id: 'inc-1',
-        employee_name: 'Ana Pérez',
-        dni: '123',
-        location_name: 'Planta',
-        business_date: '2026-09-20',
-        type: 'LATE_ARRIVAL',
-        expected_time: '08:00',
-        actual_time: '08:35',
-        late_minutes: 35,
-        status: 'OPEN',
-        review_status: null,
-      }],
+      inconsistencies: [{ ...inconsistency, status: 'OPEN' }],
+    }).mockResolvedValueOnce({
+      counts: { open: 0, resolved: 1, justified: 1, unjustified: 0 },
+      locations: [],
+      inconsistencies: [{ ...inconsistency, status: 'RESOLVED', review_status: 'JUSTIFIED' }],
     });
 
     await act(async () => root.render(<Inconsistencies />));
@@ -77,7 +82,10 @@ describe('attendance review', () => {
     await act(async () => justifyButton.click());
 
     expect(reviewInconsistencyMock).toHaveBeenCalledWith('inc-1', 'JUSTIFIED');
-    expect(container.textContent).toContain('35 min');
+    expect(container.textContent).toContain('Pendientes0');
+    expect(container.textContent).toContain('Resueltas1');
+    expect(container.textContent).toContain('Justificadas1');
+    expect(container.textContent).not.toContain('Ana Pérez');
   });
 
   it('usa los mismos periodos del filtro de Horas', async () => {
